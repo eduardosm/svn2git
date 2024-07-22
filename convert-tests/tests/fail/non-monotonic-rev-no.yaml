@@ -1,0 +1,12 @@
+svn-revs:
+  - no: 2
+  - no: 1
+
+conv-params: {}
+
+failed: true
+
+logs: |
+  D svn2git::convert::stage1: importing SVN revision 2
+  D svn2git::convert::stage1: importing SVN revision 1
+  E svn2git::convert::stage1: non monotonic increasing SVN revision numbers

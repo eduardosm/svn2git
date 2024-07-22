@@ -1,0 +1,54 @@
+svn-dump-version: 3
+svn-revs:
+  - props:
+      svn:log: first commit
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+      - path: trunk/link
+        kind: file
+        action: add
+        text-delta: false
+        prop-delta: false
+        props:
+          svn:special: "*"
+        text: "link aaaabbbbcccc"
+  - props:
+      svn:log: modify symlink
+    nodes:
+      - path: trunk/link
+        kind: file
+        action: change
+        text-delta: true
+        text: [
+          # Based on example from svndiff specification document,
+          # but with the "link " prefix
+          0x53, 0x56, 0x4E, 0x00, # header
+          0x00, # source view offset 0
+          0x11, # source view length 17
+          0x15, # target view length 21
+          0x07, # instructions length 7
+          0x01, # new data length 1
+          0x09, 0x00, # source, length 9, offset 0
+          0x04, 0x0D, # source, length 4, offset 13
+          0x81, # new, length 1
+          0x47, 0x0D, # target, length 7, offset 13
+          0x64, # new data 'd'
+        ]
+
+conv-params:
+  branches:
+    - trunk
+
+git-revs:
+  - rev: trunk~1
+    tree:
+      link:
+        type: symlink
+        target: "aaaabbbbcccc"
+  - rev: trunk~0
+    tree:
+      link:
+        type: symlink
+        target: "aaaaccccdddddddd"

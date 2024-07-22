@@ -1,0 +1,38 @@
+svn-dump-source: compressed-xz
+
+svn-revs:
+  - props:
+      svn:log: first commit
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+      - path: trunk/x
+        kind: file
+        action: add
+        text: "x\n"
+      - path: trunk/directory
+        kind: dir
+        action: add
+      - path: trunk/directory/y
+        kind: file
+        action: add
+        text: "y\n"
+
+conv-params:
+  branches:
+   - trunk
+
+git-revs:
+  - rev: trunk~0
+    parents: []
+    tree:
+      x:
+        type: normal
+        data: "x\n"
+      directory:
+        type: dir
+        items:
+          y:
+            type: normal
+            data: "y\n"

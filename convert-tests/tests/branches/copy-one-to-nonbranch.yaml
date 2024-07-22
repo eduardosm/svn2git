@@ -1,0 +1,61 @@
+svn-revs:
+  - props:
+      svn:log: init dirs
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+      - path: branches
+        kind: dir
+        action: add
+  - props:
+      svn:log: commit on trunk
+    nodes:
+      - path: trunk/x
+        kind: file
+        action: add
+        text: "x\n"
+  - props:
+      svn:log: copy trunk to branches/b1
+    nodes:
+      - path: branches/b1
+        kind: dir
+        action: add
+        copy-from-path: trunk
+
+conv-params:
+  branches:
+    - trunk
+  rename-branches:
+    trunk: master
+
+logs: |
+  D svn2git::convert::stage1: importing SVN revision 3
+  W svn2git::convert::stage1: copying branch "trunk" to non-branch/tag "branches/b1"
+  D svn2git::convert::stage1: committed on unbranched branch
+
+git-revs:
+  - rev: master~1
+    parents: []
+    tree: {}
+  - rev: master~0
+    parents: [master~1]
+    tree:
+      x:
+        type: normal
+        data: "x\n"
+  - rev: unbranched~1
+    parents: []
+    tree: {}
+  - rev: unbranched~0
+    parents: [unbranched~1]
+    tree:
+      branches:
+        type: dir
+        items:
+          b1:
+            type: dir
+            items:
+              x:
+                type: normal
+                data: "x\n"

@@ -1,0 +1,67 @@
+svn-revs:
+  - props:
+      svn:log: init dirs
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+      - path: branches
+        kind: dir
+        action: add
+      - path: tags
+        kind: dir
+        action: add
+  - props:
+      svn:log: commit on trunk
+    nodes:
+      - path: trunk/x
+        kind: file
+        action: add
+        text: "x\n"
+  - props:
+      svn:log: copy trunk to tags/t1
+    nodes:
+      - path: tags/t1
+        kind: dir
+        action: add
+        copy-from-path: trunk
+  - props:
+      svn:log: copy tags/t1 ot branches/b1
+    nodes:
+      - path: branches/b1
+        kind: dir
+        action: add
+        copy-from-path: tags/t1
+
+conv-params:
+  branches:
+    - trunk
+    - branches/*
+  rename-branches:
+    trunk: master
+    branches/*: "*"
+  tags:
+    - tags/*
+  rename-tags:
+    tags/*: "*"
+
+git-tags:
+  - tag: t1
+    rev: master~0
+
+git-revs:
+  - rev: master~1
+    parents: []
+    tree: {}
+  - rev: master~0
+    parents: [master~1]
+    tree:
+      x:
+        type: normal
+        data: "x\n"
+  - rev: b1~0
+    parents: [master~0]
+    tree:
+      x:
+        type: normal
+        data: "x\n"

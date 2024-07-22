@@ -1,0 +1,55 @@
+svn-revs:
+  - props:
+      svn:log: create trunk
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+      - path: trunk/x
+        kind: file
+        action: add
+        text: "x\n"
+  - props:
+      svn:log: create unbranched
+    nodes:
+      - path: y
+        kind: file
+        action: add
+        text: "y\n"
+      - path: directory
+        kind: dir
+        action: add
+      - path: directory/z
+        kind: file
+        action: add
+        text: "z\n"
+
+conv-params:
+  branches:
+   - trunk
+
+logs: |
+  D svn2git::convert::stage1: importing SVN revision 1
+  D svn2git::convert::stage1: creating branch "trunk" with new directory
+  D svn2git::convert::stage1: importing SVN revision 2
+  D svn2git::convert::stage1: committed on unbranched branch
+
+git-revs:
+  - rev: trunk~0
+    parents: []
+    tree:
+      x:
+        type: normal
+        data: "x\n"
+  - rev: unbranched~0
+    parents: []
+    tree:
+      y:
+        type: normal
+        data: "y\n"
+      directory:
+        type: dir
+        items:
+          z:
+            type: normal
+            data: "z\n"

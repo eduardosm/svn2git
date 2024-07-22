@@ -1,0 +1,92 @@
+svn-uuid: 14352404-68b8-472b-9260-315f1b4667fe
+
+svn-revs:
+  - props:
+      svn:log: init dirs
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+      - path: tags
+        kind: dir
+        action: add
+  - props:
+      svn:log: commit on trunk
+    nodes:
+      - path: trunk/x
+        kind: file
+        action: add
+        text: "x\n"
+  - props:
+      svn:author: user1
+      svn:log: copy trunk to tags/t1
+    nodes:
+      - path: tags/t1
+        kind: dir
+        action: add
+        copy-from-path: trunk
+  - props:
+      svn:author: user2
+      svn:log: copy trunk to tags/t2
+    nodes:
+      - path: tags/t2
+        kind: dir
+        action: add
+        copy-from-path: trunk
+
+conv-params:
+  branches:
+    - trunk
+  rename-branches:
+    trunk: master
+  tags:
+    - tags/*
+  rename-tags:
+    tags/*: "*"
+  user-map-file: user-map.txt
+  user-fallback-template: "{{ svn_author }} <unknown>"
+  tag-msg-template: |
+    uuid: {{ svn_uuid }}
+    author: {{ svn_author }}{% if mapped_author_name %}
+    mapped_author_name: {{ mapped_author_name }}{% endif %}{% if mapped_author_email %}
+    mapped_author_email: {{ mapped_author_email }}{% endif %}
+    log: {{ svn_log }}
+    path: {{ svn_path }}
+
+user-map: |
+  user1 = User 1 <user1@somewhere>
+
+git-tags:
+  - tag: t1
+    rev: master~0
+    tagger:
+      name: User 1
+      email: user1@somewhere
+    message: |-
+      uuid: 14352404-68b8-472b-9260-315f1b4667fe
+      author: user1
+      mapped_author_name: User 1
+      mapped_author_email: user1@somewhere
+      log: copy trunk to tags/t1
+      path: tags/t1
+  - tag: t2
+    rev: master~0
+    tagger:
+      name: user2
+      email: unknown
+    message: |-
+      uuid: 14352404-68b8-472b-9260-315f1b4667fe
+      author: user2
+      log: copy trunk to tags/t2
+      path: tags/t2
+
+git-revs:
+  - rev: master~1
+    parents: []
+    tree: {}
+  - rev: master~0
+    parents: [master~1]
+    tree:
+      x:
+        type: normal
+        data: "x\n"

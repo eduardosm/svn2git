@@ -1,0 +1,36 @@
+svn-revs:
+  - props:
+      svn:log: create file
+    nodes:
+      - path: x
+        kind: file
+        action: add
+        text: "x\n"
+  - props:
+      svn:log: create another file
+    nodes:
+      - path: y
+        kind: file
+        action: add
+        text: "y\n"
+
+conv-params:
+  head: ""
+  unbranched-name: onebranch
+
+git-revs:
+  - rev: onebranch~1
+    parents: []
+    tree:
+      x:
+        type: normal
+        data: "x\n"
+  - rev: onebranch~0
+    parents: [onebranch~1]
+    tree:
+      x:
+        type: normal
+        data: "x\n"
+      y:
+        type: normal
+        data: "y\n"

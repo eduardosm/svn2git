@@ -1,0 +1,30 @@
+svn-revs:
+  - props:
+      svn:log: first commit
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+      - path: trunk/file
+        kind: file
+        action: add
+        text: "x\n"
+  - props:
+      svn:log: delete file
+    nodes:
+      - path: trunk/file
+        kind: file
+        action: delete
+
+conv-params:
+  branches:
+    - trunk
+
+git-revs:
+  - rev: trunk~1
+    tree:
+      file:
+        type: normal
+        data: "x\n"
+  - rev: trunk~0
+    tree: {}

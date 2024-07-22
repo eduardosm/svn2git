@@ -1,0 +1,94 @@
+svn-uuid: bd2bf2a7-e6fc-4d27-8448-87f9d63c7fe9
+
+svn-revs:
+  - props:
+      svn:author: user1
+      svn:log: first commit
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+  - props:
+      svn:author: user2
+      svn:log: add file to trunk
+    nodes:
+      - path: trunk/file
+        kind: file
+        action: add
+        text: "x\n"
+  - props:
+      svn:author: user3
+      svn:log: add unbranched file
+    nodes:
+      - path: file
+        kind: file
+        action: add
+        text: "y\n"
+
+conv-params:
+  branches:
+   - trunk
+  user-map-file: user-map.txt
+  user-fallback-template: "{{ svn_author }} <unknown>"
+  commit-msg-template: |
+    uuid: {{ svn_uuid }}
+    author: {{ svn_author }}{% if mapped_author_name %}
+    mapped_author_name: {{ mapped_author_name }}{% endif %}{% if mapped_author_email %}
+    mapped_author_email: {{ mapped_author_email }}{% endif %}
+    log: {{ svn_log }}
+    path: {% if svn_path %}{{ svn_path }}{% else %}<none>{% endif %}
+
+user-map: |
+  user1 = User 1 <user1@somewhere>
+
+git-revs:
+  - rev: trunk~1
+    author:
+      name: User 1
+      email: user1@somewhere
+    committer:
+      name: User 1
+      email: user1@somewhere
+    message: |-
+      uuid: bd2bf2a7-e6fc-4d27-8448-87f9d63c7fe9
+      author: user1
+      mapped_author_name: User 1
+      mapped_author_email: user1@somewhere
+      log: first commit
+      path: trunk
+    parents: []
+    tree: {}
+  - rev: trunk~0
+    author:
+      name: user2
+      email: unknown
+    committer:
+      name: user2
+      email: unknown
+    message: |-
+      uuid: bd2bf2a7-e6fc-4d27-8448-87f9d63c7fe9
+      author: user2
+      log: add file to trunk
+      path: trunk
+    parents: [trunk~1]
+    tree:
+      file:
+        type: normal
+        data: "x\n"
+  - rev: unbranched~0
+    author:
+      name: user3
+      email: unknown
+    committer:
+      name: user3
+      email: unknown
+    message: |-
+      uuid: bd2bf2a7-e6fc-4d27-8448-87f9d63c7fe9
+      author: user3
+      log: add unbranched file
+      path: <none>
+    parents: []
+    tree:
+      file:
+        type: normal
+        data: "y\n"

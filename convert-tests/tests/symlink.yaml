@@ -1,0 +1,36 @@
+svn-revs:
+  - props:
+      svn:log: first commit
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+      - path: trunk/link
+        kind: file
+        action: add
+        props:
+          svn:special: "*"
+        text: "link target1"
+  - props:
+      svn:log: change symlink
+    nodes:
+      - path: trunk/link
+        kind: file
+        action: change
+        text: "link target2"
+
+conv-params:
+  branches:
+    - trunk
+
+git-revs:
+  - rev: trunk~1
+    tree:
+      link:
+        type: symlink
+        target: "target1"
+  - rev: trunk~0
+    tree:
+      link:
+        type: symlink
+        target: "target2"

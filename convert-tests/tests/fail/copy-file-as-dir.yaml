@@ -1,0 +1,28 @@
+svn-revs:
+  - props:
+      svn:log: init trunk
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+      - path: trunk/x
+        kind: file
+        action: add
+        text: "x\n"
+  - props:
+      svn:log: copy dir
+    nodes:
+      - path: trunk/y
+        kind: dir
+        action: add
+        copy-from-path: trunk/x
+
+conv-params:
+  branches:
+    - trunk
+
+failed: true
+
+logs: |
+  D svn2git::convert::stage1: importing SVN revision 2
+  E svn2git::convert::stage1: "trunk/x" at rev 1 is expected to be a directory

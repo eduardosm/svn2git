@@ -1,0 +1,40 @@
+svn-revs:
+  - props:
+      svn:log: init dirs
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+      - path: tags
+        kind: dir
+        action: add
+  - props:
+      svn:log: commit on trunk
+    nodes:
+      - path: trunk/x
+        kind: file
+        action: add
+        text: "x\n"
+  - props:
+      svn:log: create tag t1
+    nodes:
+      - path: tags/t1
+        kind: dir
+        action: add
+        copy-from-path: trunk
+
+conv-params:
+  branches:
+    - trunk
+  tags:
+    - tags/*
+  rename-branches:
+    trunk: master
+  rename-tags:
+    tags/*: "*"
+  head: tags/t1
+
+logs: |
+  E svn2git::convert::stage1: head "tags/t1" is a tag
+
+failed: true

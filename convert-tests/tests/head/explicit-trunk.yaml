@@ -1,0 +1,58 @@
+svn-revs:
+  - props:
+      svn:log: init branches
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+      - path: branches
+        kind: dir
+        action: add
+      - path: branches/b1
+        kind: dir
+        action: add
+  - props:
+      svn:log: commit on trunk
+    nodes:
+      - path: trunk/x
+        kind: file
+        action: add
+        text: "x\n"
+  - props:
+      svn:log: commit on branches/b1
+    nodes:
+      - path: branches/b1/x
+        kind: file
+        action: add
+        text: "y\n"
+
+conv-params:
+  branches:
+    - trunk
+    - branches/*
+  rename-branches:
+    trunk: master
+    branches/*: "*"
+  head: trunk
+
+git-revs:
+  - rev: HEAD
+    same: [master]
+  - rev: master~1
+    parents: []
+    tree: {}
+  - rev: master~0
+    parents: [master~1]
+    tree:
+      x:
+        type: normal
+        data: "x\n"
+  - rev: b1~1
+    parents: []
+    tree: {}
+  - rev: b1~0
+    parents: [b1~1]
+    tree:
+      x:
+        type: normal
+        data: "y\n"

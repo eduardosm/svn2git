@@ -1,0 +1,44 @@
+svn-revs:
+  - props:
+      svn:log: init trunk
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+      - path: trunk/x
+        kind: file
+        action: add
+        text: "file 1\n"
+      - path: trunk/y
+        kind: file
+        action: add
+        text: "file 2\n"
+  - props:
+      svn:log: copy file
+    nodes:
+      - path: trunk/y
+        kind: file
+        action: replace
+        copy-from-path: trunk/x
+
+conv-params:
+  branches:
+    - trunk
+
+git-revs:
+  - rev: trunk~1
+    tree:
+      x:
+        type: normal
+        data: "file 1\n"
+      y:
+        type: normal
+        data: "file 2\n"
+  - rev: trunk~0
+    tree:
+      x:
+        type: normal
+        data: "file 1\n"
+      y:
+        type: normal
+        data: "file 1\n"

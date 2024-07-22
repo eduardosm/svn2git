@@ -1,0 +1,32 @@
+svn-revs:
+  - props:
+      svn:log: first commit
+    nodes:
+      - path: x
+        kind: file
+        action: add
+        text: "x\n"
+      - path: directory
+        kind: dir
+        action: add
+      - path: directory/y
+        kind: file
+        action: add
+        text: "y\n"
+
+conv-params:
+  head: ""
+
+git-revs:
+  - rev: unbranched~0
+    parents: []
+    tree:
+      x:
+        type: normal
+        data: "x\n"
+      directory:
+        type: dir
+        items:
+          y:
+            type: normal
+            data: "y\n"

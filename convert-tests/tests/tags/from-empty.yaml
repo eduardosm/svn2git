@@ -1,0 +1,30 @@
+svn-revs:
+  - props:
+      svn:log: init dirs
+    nodes:
+      - path: tags
+        kind: dir
+        action: add
+  - props:
+      svn:log: create tag t1
+    nodes:
+      - path: tags/t1
+        kind: dir
+        action: add
+      - path: tags/t1/x
+        kind: file
+        action: add
+        text: "x\n"
+
+conv-params:
+  tags:
+    - tags/*
+  head: tags/t1
+
+git-revs:
+  - rev: tags/t1~0
+    parents: []
+    tree:
+      x:
+        type: normal
+        data: "x\n"

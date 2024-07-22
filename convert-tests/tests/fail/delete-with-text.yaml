@@ -1,0 +1,28 @@
+svn-revs:
+  - props:
+      svn:log: init trunk
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+      - path: trunk/x
+        kind: file
+        action: add
+        text: "x\n"
+  - props:
+      svn:log: delete file
+    nodes:
+      - path: trunk/x
+        kind: file
+        action: delete
+        text: "x\n"
+
+conv-params:
+  branches:
+    - trunk
+
+failed: true
+
+logs: |
+  D svn2git::convert::stage1: importing SVN revision 2
+  E svn2git::convert::stage1: SVN dump node record has unused text content

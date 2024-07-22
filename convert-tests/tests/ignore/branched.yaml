@@ -1,0 +1,117 @@
+svn-revs:
+  - props:
+      svn:log: first commit
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+        props:
+          svn:ignore: |
+            a
+            b
+            c
+  - props:
+      svn:log: create .gitignore
+    nodes:
+      - path: trunk/.gitignore
+        kind: file
+        action: add
+        text: |
+          x
+          y
+  - props:
+      svn:log: change ignore
+    nodes:
+      - path: trunk
+        kind: dir
+        action: change
+        props:
+          svn:ignore: |
+            a
+            b
+            c
+            d
+  - props:
+      svn:log: remove .gitignore
+    nodes:
+      - path: trunk/.gitignore
+        kind: file
+        action: delete
+  - props:
+      svn:log: move some ignore to global
+    nodes:
+      - path: trunk
+        kind: dir
+        action: change
+        props:
+          svn:ignore: |
+            a
+            b
+          svn:global-ignores: |
+            c
+            d
+  - props:
+      svn:log: remove ignore and global ignore
+    nodes:
+      - path: trunk
+        kind: dir
+        action: change
+        props: {}
+
+conv-params:
+  branches:
+    - trunk
+
+git-revs:
+  - rev: trunk~5
+    tree:
+      .gitignore:
+        type: normal
+        data: |
+          # ignores from svn:ignore
+          /a
+          /b
+          /c
+  - rev: trunk~4
+    tree:
+      .gitignore:
+        type: normal
+        data: |
+          # ignores from svn:ignore
+          /a
+          /b
+          /c
+  - rev: trunk~3
+    tree:
+      .gitignore:
+        type: normal
+        data: |
+          # ignores from svn:ignore
+          /a
+          /b
+          /c
+          /d
+  - rev: trunk~2
+    tree:
+      .gitignore:
+        type: normal
+        data: |
+          # ignores from svn:ignore
+          /a
+          /b
+          /c
+          /d
+  - rev: trunk~1
+    tree:
+      .gitignore:
+        type: normal
+        data: |
+          # ignores from svn:ignore
+          /a
+          /b
+
+          # ignores from svn:global-ignores
+          c
+          d
+  - rev: trunk~0
+    tree: {}

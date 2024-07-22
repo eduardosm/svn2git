@@ -1,0 +1,10 @@
+svn-uuid: This-is-not-a-UUID
+
+svn-revs: []
+
+conv-params: {}
+
+failed: true
+
+logs: |
+  E svn2git::convert::stage1: failed to read SVN dump record: invalid value header entry "UUID": "This-is-not-a-UUID"

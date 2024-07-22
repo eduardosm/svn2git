@@ -1,0 +1,67 @@
+svn-revs:
+  - props:
+      svn:log: create branches1/b1 and branches1/b2
+    nodes:
+      - path: branches1
+        kind: dir
+        action: add
+      - path: branches1/b1
+        kind: dir
+        action: add
+      - path: branches1/b2
+        kind: dir
+        action: add
+      - path: branches1/b1/x
+        kind: file
+        action: add
+        text: "file x\n"
+      - path: branches1/b2/y
+        kind: file
+        action: add
+        text: "file y\n"
+  - props:
+      svn:log: delete branches1
+    nodes:
+      - path: branches1
+        kind: dir
+        action: delete
+  - props:
+      svn:log: recovert branches1 as branches2
+    nodes:
+      - path: branches2
+        kind: dir
+        action: add
+        copy-from-rev: 1
+        copy-from-path: branches1
+
+conv-params:
+  branches:
+    - branches1/*
+    - branches2/*
+  head: branches2/b1
+
+git-revs:
+  - rev: deleted/branches1/b1~0
+    parents: []
+    tree:
+      x:
+        type: normal
+        data: "file x\n"
+  - rev: deleted/branches1/b2~0
+    parents: []
+    tree:
+      y:
+        type: normal
+        data: "file y\n"
+  - rev: branches2/b1~0
+    parents: [deleted/branches1/b1~0]
+    tree:
+      x:
+        type: normal
+        data: "file x\n"
+  - rev: branches2/b2~0
+    parents: [deleted/branches1/b2~0]
+    tree:
+      y:
+        type: normal
+        data: "file y\n"

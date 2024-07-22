@@ -1,0 +1,111 @@
+svn-uuid: 14352404-68b8-472b-9260-315f1b4667fe
+
+svn-revs:
+  - props:
+      svn:author: user1
+      svn:date: "2010-10-20T12:30:15.000000Z"
+      svn:log: first commit
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+  - props:
+      svn:author: user2
+      svn:log: add file to trunk
+    nodes:
+      - path: trunk/file
+        kind: file
+        action: add
+        text: "x\n"
+  - props:
+      svn:author: user3
+      svn:log: add unbranched file
+    nodes:
+      - path: file
+        kind: file
+        action: add
+        text: "y\n"
+  - props:
+      svn:author: user4
+      svn:log: ""
+    nodes:
+      - path: trunk/file
+        kind: file
+        action: change
+        text: "z\n"
+
+conv-params:
+  branches:
+   - trunk
+
+git-revs:
+  - rev: trunk~2
+    author:
+      name: user1
+      email: user1@14352404-68b8-472b-9260-315f1b4667fe
+      time:
+        seconds: 1287577815
+        offset: 0
+        sign: plus
+    committer:
+      name: user1
+      email: user1@14352404-68b8-472b-9260-315f1b4667fe
+      time:
+        seconds: 1287577815
+        offset: 0
+        sign: plus
+    message: |-
+      first commit
+
+      [[SVN revision: 1]]
+      [[SVN path: trunk]]
+    parents: []
+    tree: {}
+  - rev: trunk~1
+    author:
+      name: user2
+      email: user2@14352404-68b8-472b-9260-315f1b4667fe
+    committer:
+      name: user2
+      email: user2@14352404-68b8-472b-9260-315f1b4667fe
+    message: |-
+      add file to trunk
+
+      [[SVN revision: 2]]
+      [[SVN path: trunk]]
+    parents: [trunk~2]
+    tree:
+      file:
+        type: normal
+        data: "x\n"
+  - rev: trunk~0
+    author:
+      name: user4
+      email: user4@14352404-68b8-472b-9260-315f1b4667fe
+    committer:
+      name: user4
+      email: user4@14352404-68b8-472b-9260-315f1b4667fe
+    message: |-
+      [[SVN revision: 4]]
+      [[SVN path: trunk]]
+    parents: [trunk~1]
+    tree:
+      file:
+        type: normal
+        data: "z\n"
+  - rev: unbranched~0
+    author:
+      name: user3
+      email: user3@14352404-68b8-472b-9260-315f1b4667fe
+    committer:
+      name: user3
+      email: user3@14352404-68b8-472b-9260-315f1b4667fe
+    message: |-
+      add unbranched file
+
+      [[SVN revision: 3]]
+    parents: []
+    tree:
+      file:
+        type: normal
+        data: "y\n"

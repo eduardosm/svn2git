@@ -1,0 +1,38 @@
+svn-revs:
+  - props:
+      svn:log: first commit
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+      - path: trunk/original
+        kind: file
+        action: add
+        text: "initial\n"
+  - props:
+      svn:log: copy and modify file
+    nodes:
+      - path: trunk/copy
+        kind: file
+        action: add
+        copy-from-path: trunk/original
+        text: "modified\n"
+
+conv-params:
+  branches:
+    - trunk
+
+git-revs:
+  - rev: trunk~1
+    tree:
+      original:
+        type: normal
+        data: "initial\n"
+  - rev: trunk~0
+    tree:
+      original:
+        type: normal
+        data: "initial\n"
+      copy:
+        type: normal
+        data: "modified\n"

@@ -1,0 +1,39 @@
+svn-revs:
+  - props:
+      svn:log: init dirs
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+  - props:
+      svn:log: commit on trunk
+    nodes:
+      - path: trunk/x
+        kind: file
+        action: add
+        text: "x\n"
+  - props:
+      svn:log: delete trunk
+    nodes:
+      - path: trunk
+        kind: dir
+        action: delete
+
+conv-params:
+  branches:
+    - trunk
+
+logs: |
+  D svn2git::convert::stage1: importing SVN revision 3
+  D svn2git::convert::stage1: deleting branch/tag "trunk"
+
+git-revs:
+  - rev: deleted/trunk~1
+    parents: []
+    tree: {}
+  - rev: deleted/trunk~0
+    parents: [deleted/trunk~1]
+    tree:
+      x:
+        type: normal
+        data: "x\n"

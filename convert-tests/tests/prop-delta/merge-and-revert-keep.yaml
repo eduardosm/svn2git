@@ -1,0 +1,130 @@
+svn-dump-version: 3
+svn-revs:
+  - props:
+      svn:log: init directories
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+      - path: branches
+        kind: dir
+        action: add
+  - props:
+      svn:log: create A
+    nodes:
+      - path: trunk/A
+        kind: file
+        action: add
+        text: "file A\n"
+  - props:
+      svn:log: create branch b1 from trunk
+    nodes:
+      - path: branches/b1
+        kind: dir
+        action: add
+        copy-from-path: trunk
+  - props:
+      svn:log: create B
+    nodes:
+      - path: trunk/B
+        kind: file
+        action: add
+        text: "file B\n"
+  - props:
+      svn:log: create C
+    nodes:
+      - path: branches/b1/C
+        kind: file
+        action: add
+        text: "file C\n"
+  - props:
+      svn:log: merge b1 into trunk
+    nodes:
+      - path: trunk
+        kind: dir
+        action: change
+        prop-delta: true
+        props:
+          svn:mergeinfo: |
+            /branches/b1:5
+      - path: trunk/C
+        kind: file
+        action: add
+        text: "file C\n"
+  - props:
+      svn:log: revert "merge b1 into trunk"
+    nodes:
+      - path: trunk
+        kind: dir
+        action: change
+        prop-delta: true
+        props:
+          svn:mergeinfo: null
+      - path: trunk/C
+        kind: file
+        action: delete
+
+conv-params:
+  branches:
+    - trunk
+    - branches/*
+  rename-branches:
+    trunk: master
+    branches/*: "*"
+  avoid-fully-reverted-merges: false
+
+git-revs:
+  - rev: master~4
+    parents: []
+    tree: {}
+  - rev: master~3
+    parents: [master~4]
+    tree:
+      A:
+        type: normal
+        data: "file A\n"
+  - rev: b1~1
+    parents: [master~3]
+    tree:
+      A:
+        type: normal
+        data: "file A\n"
+  - rev: master~2
+    parents: [master~3]
+    tree:
+      A:
+        type: normal
+        data: "file A\n"
+      B:
+        type: normal
+        data: "file B\n"
+  - rev: b1~0
+    parents: [b1~1]
+    tree:
+      A:
+        type: normal
+        data: "file A\n"
+      C:
+        type: normal
+        data: "file C\n"
+  - rev: master~1
+    parents: [master~2, b1~0]
+    tree:
+      A:
+        type: normal
+        data: "file A\n"
+      B:
+        type: normal
+        data: "file B\n"
+      C:
+        type: normal
+        data: "file C\n"
+  - rev: master~0
+    parents: [master~1]
+    tree:
+      A:
+        type: normal
+        data: "file A\n"
+      B:
+        type: normal
+        data: "file B\n"

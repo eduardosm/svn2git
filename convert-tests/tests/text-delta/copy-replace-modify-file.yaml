@@ -1,0 +1,63 @@
+svn-dump-version: 3
+svn-revs:
+  - props:
+      svn:log: init trunk
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+      - path: trunk/x
+        kind: file
+        action: add
+        text-delta: false
+        text: "aaaabbbbcccc"
+      - path: trunk/y
+        kind: file
+        action: add
+        text-delta: false
+        text: "AAAABBBBCCCC"
+  - props:
+      svn:log: copy file
+    nodes:
+      - path: trunk/y
+        kind: file
+        action: replace
+        copy-from-path: trunk/x
+        # Delta is applied on top of trunk/x, not trunk/y
+        text-delta: true
+        text: [
+          # Example from svndiff specification document
+          0x53, 0x56, 0x4E, 0x00, # header
+          0x00, # source view offset 0
+          0x0C, # source view length 12
+          0x10, # target view length 16
+          0x07, # instructions length 7
+          0x01, # new data length 1
+          0x04, 0x00, # source, length 4, offset 0
+          0x04, 0x08, # source, length 4, offset 8
+          0x81, # new, length 1
+          0x47, 0x08, # target, length 7, offset 8
+          0x64, # new data 'd'
+        ]
+
+conv-params:
+  branches:
+    - trunk
+
+git-revs:
+  - rev: trunk~1
+    tree:
+      x:
+        type: normal
+        data: "aaaabbbbcccc"
+      y:
+        type: normal
+        data: "AAAABBBBCCCC"
+  - rev: trunk~0
+    tree:
+      x:
+        type: normal
+        data: "aaaabbbbcccc"
+      y:
+        type: normal
+        data: "aaaaccccdddddddd"

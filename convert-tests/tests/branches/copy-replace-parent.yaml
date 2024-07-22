@@ -1,0 +1,73 @@
+svn-revs:
+  - props:
+      svn:log: create branches1/b1 and branches1/b2
+    nodes:
+      - path: branches1
+        kind: dir
+        action: add
+      - path: branches1/b1
+        kind: dir
+        action: add
+      - path: branches1/b2
+        kind: file
+        action: add
+        text: "b2 is file\n"
+      - path: branches1/b1/x
+        kind: file
+        action: add
+        text: "file x\n"
+  - props:
+      svn:log: create branches2/b1 and branches2/b2
+    nodes:
+      - path: branches2
+        kind: dir
+        action: add
+      - path: branches2/b1
+        kind: file
+        action: add
+        text: "b1 is file\n"
+      - path: branches2/b2
+        kind: dir
+        action: add
+      - path: branches2/b2/y
+        kind: file
+        action: add
+        text: "file y\n"
+  - props:
+      svn:log: replace branches2 with branches1
+    nodes:
+      - path: branches2
+        kind: dir
+        action: replace
+        copy-from-path: branches1
+
+conv-params:
+  branches:
+    - branches1/*
+    - branches2/*
+  head: branches1/b1
+
+logs: |
+  D svn2git::convert::stage1: importing SVN revision 3
+  D svn2git::convert::stage1: creating branch/tag "branches2/b1" from "branches1/b1"
+  D svn2git::convert::stage1: deleting branch/tag "branches2/b2"
+
+git-revs:
+  - rev: branches1/b1~0
+    parents: []
+    tree:
+      x:
+        type: normal
+        data: "file x\n"
+  - rev: branches2/b1~0
+    parents: [branches1/b1~0]
+    tree:
+      x:
+        type: normal
+        data: "file x\n"
+  - rev: deleted/branches2/b2~0
+    parents: []
+    tree:
+      y:
+        type: normal
+        data: "file y\n"

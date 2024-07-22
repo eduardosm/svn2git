@@ -1,0 +1,86 @@
+svn-revs:
+  - props:
+      svn:log: init
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+      - path: trunk/x
+        kind: file
+        action: add
+        text: "1\n"
+  - props:
+      svn:log: add exec flag
+    nodes:
+      - path: trunk/x
+        kind: file
+        action: change
+        props:
+          svn:executable: "*"
+  - props:
+      svn:log: keep exec flag
+    nodes:
+      - path: trunk/x
+        kind: file
+        action: change
+        text: "2\n"
+  - props:
+      svn:log: remove exec flag
+    nodes:
+      - path: trunk/x
+        kind: file
+        action: change
+        props: {}
+  - props:
+      svn:log: replace with exec file
+    nodes:
+      - path: trunk/x
+        kind: file
+        action: replace
+        props:
+          svn:executable: "*"
+        text: "3\n"
+  - props:
+      svn:log: replace with non-exec file
+    nodes:
+      - path: trunk/x
+        kind: file
+        action: replace
+        # Without prop section
+        text: "4\n"
+
+conv-params:
+  branches:
+   - trunk
+
+git-revs:
+  - rev: trunk~5
+    tree:
+      x:
+        type: normal
+        data: "1\n"
+  - rev: trunk~4
+    tree:
+      x:
+        type: exec
+        data: "1\n"
+  - rev: trunk~3
+    tree:
+      x:
+        type: exec
+        data: "2\n"
+  - rev: trunk~2
+    tree:
+      x:
+        type: normal
+        data: "2\n"
+  - rev: trunk~1
+    tree:
+      x:
+        type: exec
+        data: "3\n"
+  - rev: trunk~0
+    tree:
+      x:
+        type: normal
+        data: "4\n"

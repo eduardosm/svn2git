@@ -1,0 +1,30 @@
+svn-revs:
+  - props:
+      svn:log: init trunk
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+      - path: trunk/x
+        kind: file
+        action: add
+        text: "x\n"
+  - props:
+      svn:log: replace x
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+      - path: trunk/x
+        kind: file
+        action: replace
+
+conv-params:
+  branches:
+    - trunk
+
+failed: true
+
+logs: |
+  D svn2git::convert::stage1: importing SVN revision 2
+  E svn2git::convert::stage1: missing file content in SVN dump node

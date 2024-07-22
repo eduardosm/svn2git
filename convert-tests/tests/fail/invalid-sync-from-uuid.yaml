@@ -1,0 +1,11 @@
+svn-revs:
+  - no: 0
+    props:
+      svn:sync-from-uuid: This-is-not-a-UUID
+
+conv-params: {}
+
+failed: true
+
+logs: |
+  E svn2git::convert::stage1: invalid UUID in svn:sync-from-uuid property: "This-is-not-a-UUID"

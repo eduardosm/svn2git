@@ -1,0 +1,39 @@
+svn-revs:
+  - props:
+      svn:log: first commit
+    nodes:
+      - path: x
+        kind: file
+        action: add
+        text: "file x\n"
+      - path: y
+        kind: file
+        action: add
+        text: "file y\n"
+  - props:
+      svn:log: copy y to z
+    nodes:
+      - path: z
+        kind: file
+        action: add
+        copy-from-path: y
+
+conv-params:
+  head: ""
+  delete-files:
+    - "**/y"
+
+git-revs:
+  - rev: unbranched~1
+    tree:
+      x:
+        type: normal
+        data: "file x\n"
+  - rev: unbranched~0
+    tree:
+      x:
+        type: normal
+        data: "file x\n"
+      z:
+        type: normal
+        data: "file y\n"

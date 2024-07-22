@@ -1,0 +1,45 @@
+svn-revs:
+  - props:
+      svn:log: init trunk
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+      - path: trunk/x
+        kind: file
+        action: add
+        text: "x\n"
+  - props:
+      svn:log: delete trunk
+    nodes:
+      - path: trunk
+        kind: dir
+        action: delete
+  - props:
+      svn:log: recovert trunk as trunk2
+    nodes:
+      - path: trunk2
+        kind: dir
+        action: add
+        copy-from-rev: 1
+        copy-from-path: trunk
+
+conv-params:
+  branches:
+    - trunk
+    - trunk2
+  head: trunk2
+
+git-revs:
+  - rev: deleted/trunk~0
+    parents: []
+    tree:
+      x:
+        type: normal
+        data: "x\n"
+  - rev: trunk2~0
+    parents: [deleted/trunk~0]
+    tree:
+      x:
+        type: normal
+        data: "x\n"
