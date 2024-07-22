@@ -21,6 +21,11 @@ A Subversion to Git repository converter
 
 ## Install
 
+### Pre-built binaries
+
+You can download binaries for Linux and Windows from the
+[GitHub releases page](https://github.com/eduardosm/svn2git/releases).
+
 ### Dependencies
 
 svn2git does not have runtime dependencies, but you will likely need Subversion
