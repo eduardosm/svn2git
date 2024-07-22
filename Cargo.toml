@@ -1,6 +1,6 @@
 [package]
 name = "svn2git"
-version = "0.1.0-pre"
+version = "0.1.0"
 authors = ["Eduardo Sánchez Muñoz <eduardosm-dev@e64.io>"]
 edition = "2021"
 rust-version = "1.77"
@@ -10,7 +10,7 @@ license = "MIT OR Apache-2.0"
 keywords = ["converter", "git", "repository", "subversion", "svn"]
 categories = ["development-tools"]
 exclude = ["/.github", "/book", "/ci", ".gitignore"]
-publish = false
+publish = true
 
 [[test]]
 name = "convert"
