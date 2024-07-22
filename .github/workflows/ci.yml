@@ -1,0 +1,162 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - '*'
+  pull_request:
+
+jobs:
+  report:
+    needs:
+      - lint-aux
+      - extract-changelog
+      - rustfmt
+      - clippy
+      - build-and-test
+      - package-crate
+      - build-dist-linux
+      - build-dist-windows
+      - build-dist-book
+    # 'always()' is needed because GitHub treats a skipped job (due to a failed
+    # dependency) a success.
+    if: always()
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Report status
+        env:
+          NEEDS_JSON: ${{ toJson(needs) }}
+        # Make sure all dependencies succeeded.
+        run: jq --exit-status 'all(.result == "success")' <<< "$NEEDS_JSON"
+
+  lint-aux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install lint utilities
+        run: sudo npm install -g markdownlint-cli
+      - name: Install Rust
+        run: ./ci/install-rust.sh stable --profile minimal
+      - run: ./ci/lint-aux.sh
+
+  extract-changelog:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        run: ./ci/install-rust.sh stable --profile minimal
+      - run: ./ci/extract-changelog.sh
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: version-changelog
+          path: version-changelog
+          if-no-files-found: error
+
+  rustfmt:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        run: ./ci/install-rust.sh stable --profile minimal -c rustfmt
+      - run: cargo fmt --all -- --check
+
+  clippy:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        run: ./ci/install-rust.sh stable --profile minimal -c clippy
+      - run: ./ci/clippy.sh
+
+  build-and-test:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        include:
+          - rust-version: msrv
+          - rust-version: stable
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        run: ./ci/install-rust.sh "${{ matrix.rust-version }}" --profile minimal
+      - run: ./ci/build-and-test.sh
+
+  package-crate:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        run: ./ci/install-rust.sh stable --profile minimal
+      - run: ./ci/package-crate.sh
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaged-crate
+          path: output
+          if-no-files-found: error
+
+  build-dist-linux:
+    runs-on: ubuntu-22.04
+    env:
+      DOCKER_IMAGE: quay.io/pypa/manylinux2014_x86_64
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pull Docker image ${{ env.DOCKER_IMAGE }}
+        run: docker pull "$DOCKER_IMAGE"
+      - name: Run Docker container
+        run: |
+          docker run \
+            -v "$(pwd):/workdir" \
+            -w /workdir \
+            "$DOCKER_IMAGE" \
+            bash ./ci/build-dist-linux.sh
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-linux
+          path: |
+            output/svn2git-linux-x86_64.tar.gz
+            output/svn2git-linux-i686.tar.gz
+          if-no-files-found: error
+
+  build-dist-windows:
+    runs-on: ubuntu-22.04
+    env:
+      DOCKER_IMAGE: debian:12-slim
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pull Docker image ${{ env.DOCKER_IMAGE }}
+        run: docker pull "$DOCKER_IMAGE"
+      - name: Run Docker container
+        run: |
+          docker run \
+            -v "$(pwd):/workdir" \
+            -w /workdir \
+            "$DOCKER_IMAGE" \
+            bash ./ci/build-dist-windows.sh
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-windows
+          path: |
+            output/svn2git-windows-x86_64.zip
+            output/svn2git-windows-i686.zip
+          if-no-files-found: error
+
+  build-dist-book:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        run: ./ci/install-rust.sh stable --profile minimal
+      - name: Install mdbook
+        run: cargo install --locked --version 0.4.40 mdbook
+      - name: Build book
+        run: ./ci/build-dist-book.sh
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-book
+          path: book/svn2git-book.zip
+          if-no-files-found: error

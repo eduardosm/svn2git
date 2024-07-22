@@ -9,7 +9,7 @@ repository = "https://github.com/eduardosm/svn2git"
 license = "MIT OR Apache-2.0"
 keywords = ["converter", "git", "repository", "subversion", "svn"]
 categories = ["development-tools"]
-exclude = ["/book", ".gitignore"]
+exclude = ["/.github", "/book", "/ci", ".gitignore"]
 publish = false
 
 [[test]]
