@@ -20,10 +20,10 @@ harness = false
 [dependencies]
 bzip2 = { version = "0.4.4", features = ["static"] }
 chrono = "0.4.37"
-clap = { version = "4.5.11", features = ["derive"] }
-crossterm = "0.27.0"
+clap = { version = "4.5.14", features = ["derive"] }
+crossterm = "0.28.1"
 cyclic-poly-23 = "0.3.1"
-flate2 = "1.0.30"
+flate2 = "1.0.31"
 gix-actor = "0.31.5"
 gix-date = "0.8.7"
 gix-features = { version = "0.38.2", features = ["fast-sha1"] }
@@ -32,11 +32,11 @@ gix-object = "0.42.3"
 gix-pack = "0.51.1"
 hashbrown = "0.14.5"
 indoc = "2.0.5"
-liblzma = { version = "0.3.2", features = ["static"] }
+liblzma = { version = "0.3.4", features = ["static"] }
 lru-mem = "0.3.0"
 lz4_flex = "0.11.3"
-minijinja = "2.1.0"
-serde = { version = "1.0.204", features = ["derive"] }
+minijinja = "2.1.2"
+serde = { version = "1.0.205", features = ["derive"] }
 serde_yaml = "0.9.34"
 smallvec = "1.13.2"
 tracing = "0.1.40"
