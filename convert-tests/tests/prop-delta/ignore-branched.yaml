@@ -56,7 +56,7 @@ svn-revs:
             f
           svn:global-ignores: null
 
-conv-params:
+conv-params: |
   branches:
     - trunk
 

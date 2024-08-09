@@ -46,7 +46,7 @@ svn-revs:
         # Without prop section
         text: "4\n"
 
-conv-params:
+conv-params: |
   head: ""
 
 git-revs:

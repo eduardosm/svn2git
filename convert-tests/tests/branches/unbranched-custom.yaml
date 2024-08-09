@@ -14,7 +14,7 @@ svn-revs:
         action: add
         text: "y\n"
 
-conv-params:
+conv-params: |
   head: ""
   unbranched-name: onebranch
 

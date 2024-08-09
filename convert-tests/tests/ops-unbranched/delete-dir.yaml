@@ -16,7 +16,7 @@ svn-revs:
         kind: dir
         action: delete
 
-conv-params:
+conv-params: |
   head: ""
 
 git-revs:

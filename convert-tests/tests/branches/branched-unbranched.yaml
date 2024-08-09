@@ -24,7 +24,7 @@ svn-revs:
         action: add
         text: "z\n"
 
-conv-params:
+conv-params: |
   branches:
    - trunk
 

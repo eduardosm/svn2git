@@ -89,7 +89,7 @@ svn-revs:
         action: add
         text: "file E\n"
 
-conv-params:
+conv-params: |
   branches:
     - trunk
     - branches/*

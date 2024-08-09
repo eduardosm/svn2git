@@ -27,7 +27,7 @@ svn-revs:
         action: add
         copy-from-path: ""
 
-conv-params:
+conv-params: |
   branches:
     - branches/*
     - backup/branches/*

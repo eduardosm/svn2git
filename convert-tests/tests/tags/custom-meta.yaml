@@ -34,7 +34,7 @@ svn-revs:
         action: add
         copy-from-path: trunk
 
-conv-params:
+conv-params: |
   branches:
     - trunk
   rename-branches:

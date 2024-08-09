@@ -2,7 +2,7 @@ svn-uuid: This-is-not-a-UUID
 
 svn-revs: []
 
-conv-params: {}
+conv-params: ""
 
 failed: true
 

@@ -24,7 +24,7 @@ svn-revs:
         copy-from-rev: 1
         copy-from-path: trunk
 
-conv-params:
+conv-params: |
   branches:
     - trunk
     - trunk2

@@ -58,7 +58,7 @@ svn-revs:
         action: change
         props: {}
 
-conv-params:
+conv-params: |
   branches:
     - trunk
   generate-gitignore: false

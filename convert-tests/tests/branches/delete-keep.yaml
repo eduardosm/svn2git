@@ -19,7 +19,7 @@ svn-revs:
         kind: dir
         action: delete
 
-conv-params:
+conv-params: |
   branches:
     - trunk
 

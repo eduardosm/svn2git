@@ -16,7 +16,7 @@ svn-revs:
         kind: file
         action: delete
 
-conv-params:
+conv-params: |
   branches:
     - trunk
 

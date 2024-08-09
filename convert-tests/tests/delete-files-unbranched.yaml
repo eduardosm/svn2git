@@ -18,7 +18,7 @@ svn-revs:
         action: add
         copy-from-path: y
 
-conv-params:
+conv-params: |
   head: ""
   delete-files:
     - "**/y"

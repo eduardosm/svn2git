@@ -14,7 +14,7 @@ svn-revs:
         copy-from-rev: 3
         copy-from-path: trunk/y
 
-conv-params:
+conv-params: |
   branches:
     - trunk
 

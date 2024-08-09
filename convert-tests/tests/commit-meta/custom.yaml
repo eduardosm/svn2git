@@ -25,7 +25,7 @@ svn-revs:
         action: add
         text: "y\n"
 
-conv-params:
+conv-params: |
   branches:
    - trunk
   user-map-file: user-map.txt

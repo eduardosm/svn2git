@@ -21,7 +21,7 @@ svn-revs:
         action: replace
         copy-from-path: trunk/x
 
-conv-params:
+conv-params: |
   branches:
     - trunk
 

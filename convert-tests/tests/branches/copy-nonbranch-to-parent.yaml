@@ -27,7 +27,7 @@ svn-revs:
         action: add
         copy-from-path: branches1
 
-conv-params:
+conv-params: |
   branches:
     - branches2/*
   head: branches2/b1

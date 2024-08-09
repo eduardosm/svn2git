@@ -19,7 +19,7 @@ svn-revs:
         kind: file
         action: replace
 
-conv-params:
+conv-params: |
   branches:
     - trunk
 
