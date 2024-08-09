@@ -18,7 +18,7 @@ svn-revs:
         copy-from-path: trunk/original
         text: "modified\n"
 
-conv-params:
+conv-params: |
   branches:
     - trunk
 

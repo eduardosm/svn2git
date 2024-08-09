@@ -22,7 +22,7 @@ svn-revs:
         copy-from-path: trunk/x
         text: "file 3\n"
 
-conv-params:
+conv-params: |
   branches:
     - trunk
 

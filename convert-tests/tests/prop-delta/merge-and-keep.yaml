@@ -64,7 +64,7 @@ svn-revs:
         action: add
         text: "file D\n"
 
-conv-params:
+conv-params: |
   branches:
     - trunk
     - branches/*

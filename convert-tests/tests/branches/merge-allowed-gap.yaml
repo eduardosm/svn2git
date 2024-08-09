@@ -50,7 +50,7 @@ svn-revs:
         action: add
         text: "file B\n"
 
-conv-params:
+conv-params: |
   branches:
     - trunk
     - branches/*

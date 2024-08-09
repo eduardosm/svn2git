@@ -13,7 +13,7 @@ svn-revs:
         action: replace
         text: "x\n"
 
-conv-params:
+conv-params: |
   branches:
     - trunk
 

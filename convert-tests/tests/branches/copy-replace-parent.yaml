@@ -41,7 +41,7 @@ svn-revs:
         action: replace
         copy-from-path: branches1
 
-conv-params:
+conv-params: |
   branches:
     - branches1/*
     - branches2/*

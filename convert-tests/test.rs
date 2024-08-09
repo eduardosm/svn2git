@@ -24,8 +24,7 @@ pub(crate) fn run_test(test_path: &Path) -> Result<(), String> {
     }
 
     let conv_params_path = temp_dir.join("conv-params.yaml");
-    let conv_params_raw = serde_yaml::to_string(&test_def.conv_params).unwrap();
-    std::fs::write(&conv_params_path, conv_params_raw.as_bytes())
+    std::fs::write(&conv_params_path, test_def.conv_params.as_bytes())
         .map_err(|e| format!("failed to write {conv_params_path:?}: {e}"))?;
 
     let svn_dump_path = temp_dir.join("svn-dump");

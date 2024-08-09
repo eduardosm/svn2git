@@ -34,7 +34,7 @@ svn-revs:
         copy-from-rev: 1
         copy-from-path: branches1
 
-conv-params:
+conv-params: |
   branches:
     - branches1/*
     - branches2/*

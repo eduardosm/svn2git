@@ -21,7 +21,7 @@ svn-revs:
         action: add
         copy-from-path: trunk/y
 
-conv-params:
+conv-params: |
   branches:
     - trunk
   delete-files:

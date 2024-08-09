@@ -17,7 +17,7 @@ svn-revs:
         action: delete
         text: "x\n"
 
-conv-params:
+conv-params: |
   branches:
     - trunk
 

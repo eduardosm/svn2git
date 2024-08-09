@@ -18,7 +18,7 @@ svn-revs:
         action: replace
         copy-from-path: x
 
-conv-params:
+conv-params: |
   head: ""
 
 git-revs:

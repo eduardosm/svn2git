@@ -20,7 +20,7 @@ svn-revs:
         action: add
         copy-from-path: trunk/dir
 
-conv-params:
+conv-params: |
   branches:
     - trunk
 

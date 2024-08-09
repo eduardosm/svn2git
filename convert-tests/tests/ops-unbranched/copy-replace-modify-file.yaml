@@ -19,7 +19,7 @@ svn-revs:
         copy-from-path: x
         text: "file 3\n"
 
-conv-params:
+conv-params: |
   head: ""
 
 git-revs:

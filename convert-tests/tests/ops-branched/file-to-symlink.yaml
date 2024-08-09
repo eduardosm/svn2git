@@ -46,7 +46,7 @@ svn-revs:
           svn:special: "*"
         text: "link target3"
 
-conv-params:
+conv-params: |
   branches:
     - trunk
 

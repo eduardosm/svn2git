@@ -49,9 +49,9 @@ svn-revs:
         # Without prop section
         text: "4\n"
 
-conv-params:
+conv-params: |
   branches:
-   - trunk
+    - trunk
 
 git-revs:
   - rev: trunk~5

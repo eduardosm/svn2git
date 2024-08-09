@@ -34,7 +34,7 @@ svn-revs:
           0x64, # new data 'd'
         ]
 
-conv-params:
+conv-params: |
   branches:
     - trunk
 

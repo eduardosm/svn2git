@@ -12,7 +12,7 @@ pub(crate) struct Test {
     #[serde(rename = "svn-revs")]
     pub(crate) svn_revs: Vec<SvnRev>,
     #[serde(rename = "conv-params")]
-    pub(crate) conv_params: serde_yaml::Value,
+    pub(crate) conv_params: String,
     #[serde(rename = "user-map")]
     pub(crate) user_map: Option<String>,
     #[serde(rename = "git-repack", default = "false_")]

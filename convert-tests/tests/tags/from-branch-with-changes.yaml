@@ -27,7 +27,7 @@ svn-revs:
         action: change
         text: "y\n"
 
-conv-params:
+conv-params: |
   branches:
     - trunk
   tags:

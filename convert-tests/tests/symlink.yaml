@@ -19,7 +19,7 @@ svn-revs:
         action: change
         text: "link target2"
 
-conv-params:
+conv-params: |
   branches:
     - trunk
 

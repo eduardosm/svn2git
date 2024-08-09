@@ -16,7 +16,7 @@ svn-revs:
         action: add
         text: "x\n"
 
-conv-params:
+conv-params: |
   tags:
     - tags/*
   head: tags/t1

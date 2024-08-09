@@ -15,7 +15,7 @@ svn-revs:
         copy-from-path: original
         text: "modified\n"
 
-conv-params:
+conv-params: |
   head: ""
 
 git-revs:
