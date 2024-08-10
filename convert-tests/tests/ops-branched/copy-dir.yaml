@@ -21,8 +21,7 @@ svn-revs:
         copy-from-path: trunk/dir
 
 conv-params: |
-  branches:
-    - trunk
+  branches = ["trunk"]
 
 git-revs:
   - rev: trunk~1

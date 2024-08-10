@@ -22,10 +22,8 @@ svn-revs:
         copy-from-path: trunk/y
 
 conv-params: |
-  branches:
-    - trunk
-  delete-files:
-    - "**/y"
+  branches = ["trunk"]
+  delete-files = ["**/y"]
 
 git-revs:
   - rev: trunk~1

@@ -35,23 +35,22 @@ svn-revs:
         copy-from-path: trunk
 
 conv-params: |
-  branches:
-    - trunk
-  rename-branches:
-    trunk: master
-  tags:
-    - tags/*
-  rename-tags:
-    tags/*: "*"
-  user-map-file: user-map.txt
-  user-fallback-template: "{{ svn_author }} <unknown>"
-  tag-msg-template: |
-    uuid: {{ svn_uuid }}
-    author: {{ svn_author }}{% if mapped_author_name %}
-    mapped_author_name: {{ mapped_author_name }}{% endif %}{% if mapped_author_email %}
-    mapped_author_email: {{ mapped_author_email }}{% endif %}
-    log: {{ svn_log }}
-    path: {{ svn_path }}
+  branches = ["trunk"]
+  rename-branches."trunk" = "master"
+
+  tags = ["tags/*"]
+  rename-tags."tags/*" = "*"
+
+  user-map-file = "user-map.txt"
+  user-fallback-template = "{{ svn_author }} <unknown>"
+  tag-msg-template = """
+  uuid: {{ svn_uuid }}
+  author: {{ svn_author }}{% if mapped_author_name %}
+  mapped_author_name: {{ mapped_author_name }}{% endif %}{% if mapped_author_email %}
+  mapped_author_email: {{ mapped_author_email }}{% endif %}
+  log: {{ svn_log }}
+  path: {{ svn_path }}
+  """
 
 user-map: |
   user1 = User 1 <user1@somewhere>

@@ -13,8 +13,7 @@ svn-revs:
         action: delete
 
 conv-params: |
-  branches:
-    - trunk
+  branches = ["trunk"]
 
 failed: true
 

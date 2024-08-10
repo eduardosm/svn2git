@@ -57,8 +57,7 @@ svn-revs:
           svn:global-ignores: null
 
 conv-params: |
-  branches:
-    - trunk
+  branches = ["trunk"]
 
 git-revs:
   - rev: trunk~4

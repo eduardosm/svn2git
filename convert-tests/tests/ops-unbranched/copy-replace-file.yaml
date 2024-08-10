@@ -19,7 +19,7 @@ svn-revs:
         copy-from-path: x
 
 conv-params: |
-  head: ""
+  head = ""
 
 git-revs:
   - rev: unbranched~1

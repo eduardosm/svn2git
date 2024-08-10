@@ -20,7 +20,7 @@ svn-revs:
         text: "file 3\n"
 
 conv-params: |
-  head: ""
+  head = ""
 
 git-revs:
   - rev: unbranched~1

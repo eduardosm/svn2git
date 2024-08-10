@@ -8,22 +8,24 @@
 
   <u>Example</u>
 
-  ```yaml
-  branches:
+  ```toml
+  branches = [
     # Consider "trunk" a branch.
-    - trunk
+    "trunk",
     # Consider each subdirectory in "branches" a branch.
-    - branches/*
+    "branches/*",
     # Do not consider "branches/more" a branch. Instead, consider each
     # subdirectory a branch.
-    - branches/more/*
+    "branches/more/*",
+  ]
 
-  tags:
+  tags = [
     # Consider each subdirectory in "tags" a tag.
-    - tags/*
+    "tags/*",
+  ]
   ```
 
-* `rename-branches` and `rename-tags` (default: empty array)
+* `rename-branches` and `rename-tags` (default: empty table)
 
   By default, branches and tags will have the SVN path as the name. These
   options allow specifying key-value maps to rename branches and tags.
@@ -32,16 +34,14 @@
 
   <u>Example</u>
 
-  ```yaml
-  rename-branches:
-    # Rename "trunk" to "master" (exact rename).
-    trunk: master
-    # Rename "branches/<name>" to "b-<name>" (prefix replacement).
-    branches/*: b-*
+  ```toml
+  # Rename "trunk" to "master" (exact rename).
+  rename-branches.trunk = "master"
+  # Rename "branches/<name>" to "b-<name>" (prefix replacement).
+  rename-branches."branches/*" = "b-*"
 
-  rename-tags:
-    # Rename "tags/<name>" to "<name>" (prefix replacement).
-    tags/*: "*"
+  # Rename "tags/<name>" to "<name>" (prefix replacement).
+  rename-tags."tags/*" = "*"
   ```
 
 * `keep-deleted-branches` and `keep-deleted-tags` (default: `true`)
@@ -51,9 +51,9 @@
 
   <u>Example</u>
 
-  ```yaml
-  keep-deleted-branches: false
-  keep-deleted-tags: false
+  ```toml
+  keep-deleted-branches = false
+  keep-deleted-tags = false
   ```
 
 * `head` (default: `trunk`)
@@ -64,9 +64,9 @@
 
   <u>Example</u>
 
-  ```yaml
+  ```toml
   # The branch whose SVN path is "trunk" will be used as Git HEAD.
-  head: trunk
+  head = "trunk"
   ```
 
   You can set it to an empty string to use the unbranched branch (see below) as
@@ -74,8 +74,8 @@
 
   <u>Example</u>
 
-  ```yaml
-  head: ""
+  ```toml
+  head = ""
   ```
 
 * `unbranched-name` (default: `unbranched`)
@@ -85,8 +85,8 @@
 
   <u>Example</u>
 
-  ```yaml
-  unbranched-name: unbranched
+  ```toml
+  unbranched-name = "unbranched"
   ```
 
 * `enable-merges` (default: `true`)
@@ -96,9 +96,9 @@
 
   <u>Example</u>
 
-  ```yaml
+  ```toml
   # Disable Git merges
-  enable-merges: false
+  enable-merges = "false"
   ```
 
 * `generate-gitignore` (default: `true`)
@@ -109,30 +109,31 @@
 
   <u>Example</u>
 
-  ```yaml
+  ```toml
   # Generate .gitignore files
-  generate-gitignore: true
+  generate-gitignore = "true"
   ```
 
 * `delete-files` (default: empty array)
 
-  Array of regular patterns that match paths of files that should be deleted.
+  Array of patterns that match paths of files that should be deleted.
 
   <u>Example</u>
 
-  ```yaml
-  delete-files:
+  ```toml
+  delete-files = [
     # Delete ".cvsignore" files (regardless of their location)
-    - "**/.cvsignore"
+    "**/.cvsignore",
+  ]
   ```
 
 * `user-map-file`
 
-  Specifies the path (relative to the location of the parameters YAML file)
+  Specifies the path (relative to the location of the parameters TOML file)
   which maps Subversion usernames to Git names/emails.
 
   <u>Example</u>
 
-  ```yaml
-  user-map-file: user-map.txt
+  ```toml
+  user-map-file = "user-map.txt"
   ```

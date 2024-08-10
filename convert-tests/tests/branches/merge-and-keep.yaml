@@ -61,13 +61,14 @@ svn-revs:
         text: "file D\n"
 
 conv-params: |
-  branches:
-    - trunk
-    - branches/*
-  rename-branches:
-    trunk: master
-    branches/*: "*"
-  avoid-fully-reverted-merges: true
+  branches = [
+    "trunk",
+    "branches/*",
+  ]
+  rename-branches."trunk" = "master"
+  rename-branches."branches/*" = "*"
+
+  avoid-fully-reverted-merges = true
 
 logs: |
   D svn2git::convert::stage2: emitting branch commits and tags for SVN revision 6

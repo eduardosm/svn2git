@@ -27,13 +27,14 @@ svn-revs:
         text: "y\n"
 
 conv-params: |
-  branches:
-    - trunk
-    - branches/*
-  rename-branches:
-    trunk: master
-    branches/*: "*"
-  head: trunk
+  branches = [
+    "trunk",
+    "branches/*",
+  ]
+  rename-branches."trunk" = "master"
+  rename-branches."branches/*" = "*"
+
+  head = "trunk"
 
 git-revs:
   - rev: HEAD

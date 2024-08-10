@@ -33,13 +33,14 @@ svn-revs:
         action: delete
 
 conv-params: |
-  branches:
-    - trunk
-    - branches/*
-  rename-branches:
-    trunk: master
-    branches/*: "*"
-  keep-deleted-branches: false
+  branches = [
+    "trunk",
+    "branches/*",
+  ]
+  rename-branches."trunk" = "master"
+  rename-branches."branches/*" = "*"
+
+  keep-deleted-branches = false
 
 logs: |
   E svn2git::convert::stage1: head "trunk" has been removed

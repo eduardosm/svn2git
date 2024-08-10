@@ -69,8 +69,7 @@ svn-revs:
         props: {}
 
 conv-params: |
-  branches:
-    - trunk
+  branches = ["trunk"]
 
 git-revs:
   - rev: trunk~0

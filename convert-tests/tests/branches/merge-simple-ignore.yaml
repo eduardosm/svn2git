@@ -51,15 +51,17 @@ svn-revs:
         text: "file C\n"
 
 conv-params: |
-  branches:
-    - trunk
-    - branches/*
-  rename-branches:
-    trunk: master
-    branches/*: "*"
-  ignore-merges:
-    - path: trunk
-      rev: 6
+  branches = [
+    "trunk",
+    "branches/*",
+  ]
+  rename-branches."trunk" = "master"
+  rename-branches."branches/*" = "*"
+
+
+  ignore-merges = [
+    { path = "trunk", rev = 6 },
+  ]
 
 git-revs:
   - rev: master~3

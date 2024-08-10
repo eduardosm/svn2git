@@ -50,8 +50,7 @@ svn-revs:
         text: "4\n"
 
 conv-params: |
-  branches:
-    - trunk
+  branches = ["trunk"]
 
 git-revs:
   - rev: trunk~5

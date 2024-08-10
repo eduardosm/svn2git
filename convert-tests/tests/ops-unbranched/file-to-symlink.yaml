@@ -47,7 +47,7 @@ svn-revs:
         text: "link target3"
 
 conv-params: |
-  head: ""
+  head = ""
 
 git-revs:
   - rev: unbranched~4

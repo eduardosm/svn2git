@@ -31,10 +31,8 @@ svn-revs:
         text: "y\n"
 
 conv-params: |
-  branches:
-    - trunk
-  tags:
-    - tags/*
+  branches = ["trunk"]
+  tags = ["tags/*"]
 
 git-revs:
   - rev: trunk~1

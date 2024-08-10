@@ -36,7 +36,7 @@
 
 * `-P <FILE>` or `--conv-params <FILE>` (required)
 
-  Path to a file in YAML format used to configure the conversion. See the
+  Path to a file in TOML format used to configure the conversion. See the
   [Conversion Parameters](./conv-params.md) section.
 
 * `--obj-cache-size <SIZE>` (default: `384`)

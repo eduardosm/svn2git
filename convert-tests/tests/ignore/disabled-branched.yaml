@@ -59,9 +59,8 @@ svn-revs:
         props: {}
 
 conv-params: |
-  branches:
-    - trunk
-  generate-gitignore: false
+  branches = ["trunk"]
+  generate-gitignore = false
 
 git-revs:
   - rev: trunk~5

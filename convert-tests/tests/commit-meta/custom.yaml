@@ -26,17 +26,17 @@ svn-revs:
         text: "y\n"
 
 conv-params: |
-  branches:
-   - trunk
-  user-map-file: user-map.txt
-  user-fallback-template: "{{ svn_author }} <unknown>"
-  commit-msg-template: |
-    uuid: {{ svn_uuid }}
-    author: {{ svn_author }}{% if mapped_author_name %}
-    mapped_author_name: {{ mapped_author_name }}{% endif %}{% if mapped_author_email %}
-    mapped_author_email: {{ mapped_author_email }}{% endif %}
-    log: {{ svn_log }}
-    path: {% if svn_path %}{{ svn_path }}{% else %}<none>{% endif %}
+  branches = ["trunk"]
+  user-map-file = "user-map.txt"
+  user-fallback-template = "{{ svn_author }} <unknown>"
+  commit-msg-template = """
+  uuid: {{ svn_uuid }}
+  author: {{ svn_author }}{% if mapped_author_name %}
+  mapped_author_name: {{ mapped_author_name }}{% endif %}{% if mapped_author_email %}
+  mapped_author_email: {{ mapped_author_email }}{% endif %}
+  log: {{ svn_log }}
+  path: {% if svn_path %}{{ svn_path }}{% else %}<none>{% endif %}
+  """
 
 user-map: |
   user1 = User 1 <user1@somewhere>

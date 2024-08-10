@@ -20,8 +20,7 @@ svn-revs:
         action: replace
 
 conv-params: |
-  branches:
-    - trunk
+  branches = ["trunk"]
 
 failed: true
 

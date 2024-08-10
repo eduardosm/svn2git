@@ -1,6 +1,6 @@
 [package]
 name = "svn2git"
-version = "0.1.0"
+version = "0.2.0-pre"
 authors = ["Eduardo Sánchez Muñoz <eduardosm-dev@e64.io>"]
 edition = "2021"
 rust-version = "1.77"
@@ -10,7 +10,7 @@ license = "MIT OR Apache-2.0"
 keywords = ["converter", "git", "repository", "subversion", "svn"]
 categories = ["development-tools"]
 exclude = ["/.github", "/book", "/ci", ".gitignore"]
-publish = true
+publish = false
 
 [[test]]
 name = "convert"
@@ -37,8 +37,8 @@ lru-mem = "0.3.0"
 lz4_flex = "0.11.3"
 minijinja = "2.1.2"
 serde = { version = "1.0.205", features = ["derive"] }
-serde_yaml = "0.9.34"
 smallvec = "1.13.2"
+toml = "0.8.19"
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
 uuid = "1.10.0"
@@ -58,6 +58,7 @@ features = ["std"]
 gix = "0.64.0"
 libtest-mimic = "0.7.3"
 rand = "0.8.5"
+serde_yaml = "0.9.34"
 
 [profile.release]
 panic = "abort"

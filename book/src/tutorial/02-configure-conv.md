@@ -11,45 +11,43 @@ user1 = User One <user1@somewhere>
 user2 = User Two <user2@somewhere>
 ```
 
-And a YAML file with some configuration parameters (let's name it
-`my-conv-params.yaml`):
+And a TOML file with some configuration parameters (let's name it
+`my-conv-params.toml`):
 
-```yaml
+```toml
 # Specify which directories within the repository are considered branches
-branches:
+branches = [
   # "trunk" is a branch
-  - trunk
+  "trunk",
   # Each directory inside "branches" is a branch
-  - branches/*
+  "branches/*",
   # "branches/more_branches" is not a branch itself.
   # Instead, each subdirectory is a branch
-  - branches/more_branches/*
-
-rename-branches:
-  # Rename "trunk" branch to "master"
-  trunk: master
-  # Remove "branches/" prefix from all branches in "branches/"
-  branches/*: "*"
+  "branches/more_branches/*",
+]
+# Rename "trunk" branch to "master"
+rename-branches."trunk" = "master"
+# Remove "branches/" prefix from all branches in "branches/"
+rename-branches."branches/*" = "*"
 
 # Specify which directories within the repository are considered tags
-tags:
+tags = [
   # Each directory inside "tags" is a tag
-  - tags/*
-
-rename-tags:
-  # Remove "tags/" prefix from all tags in "tags/"
-  tags/*: "*"
+  "tags/*",
+]
+# Remove "tags/" prefix from all tags in "tags/"
+rename-tags."tags/*" = "*"
 
 # Specify the Subversion branch whose converted Git branch will become the Git
 # HEAD.
-head: trunk
+head = "trunk"
 
 # Specify the name of the Git branch where anything that is not part of a
 # Subversion branch or tag will be placed
-unbranched-name: unbranched
+unbranched-name = "unbranched"
 
 # Specify the file that maps Subversion users to Git names/emails.
-user-map-file: my-user-map.txt
+user-map-file = "my-user-map.txt"
 ```
 
 You can find more conversion parameters and their description in the

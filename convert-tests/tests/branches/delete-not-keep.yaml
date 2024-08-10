@@ -30,13 +30,14 @@ svn-revs:
         action: delete
 
 conv-params: |
-  branches:
-    - trunk
-    - branches/*
-  rename-branches:
-    branches/*: "*"
-  keep-deleted-branches: false
-  head: "branches/b1"
+  branches = [
+    "trunk",
+    "branches/*",
+  ]
+  rename-branches."branches/*" = "*"
+
+  keep-deleted-branches = false
+  head = "branches/b1"
 
 logs: |
   D svn2git::convert::stage1: importing SVN revision 3
