@@ -17,7 +17,6 @@ impl<'a> GitMetaMaker<'a> {
     ) -> Result<Self, String> {
         let mut jinja_env = minijinja::Environment::empty();
         jinja_env.set_undefined_behavior(minijinja::UndefinedBehavior::Strict);
-        jinja_env.add_filter("conv_crlf", |s: String| s.replace("\r\n", "\n"));
 
         jinja_env
             .add_template("user_fallback", user_fallback_template)
@@ -64,7 +63,8 @@ impl crate::convert::GitMetaMaker for GitMetaMaker<'_> {
         let msg_template = self.jinja_env.get_template("commit_msg").unwrap();
         let message = msg_template
             .render(&jinja_ctx)
-            .map_err(|e| format!("failed to render git commit message: {e}"))?;
+            .map_err(|e| format!("failed to render git commit message: {e}"))?
+            .replace("\r\n", "\n");
 
         Ok(GitCommitMeta {
             author: gix_actor::Signature {
@@ -114,7 +114,8 @@ impl crate::convert::GitMetaMaker for GitMetaMaker<'_> {
         let msg_template = self.jinja_env.get_template("tag_msg").unwrap();
         let message = msg_template
             .render(&jinja_ctx)
-            .map_err(|e| format!("failed to render git commit message: {e}"))?;
+            .map_err(|e| format!("failed to render git commit message: {e}"))?
+            .replace("\r\n", "\n");
 
         Ok(GitTagMeta {
             tagger: Some(gix_actor::Signature {
