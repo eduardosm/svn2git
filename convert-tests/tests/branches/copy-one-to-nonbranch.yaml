@@ -24,10 +24,8 @@ svn-revs:
         copy-from-path: trunk
 
 conv-params: |
-  branches:
-    - trunk
-  rename-branches:
-    trunk: master
+  branches = ["trunk"]
+  rename-branches."trunk" = "master"
 
 logs: |
   D svn2git::convert::stage1: importing SVN revision 3

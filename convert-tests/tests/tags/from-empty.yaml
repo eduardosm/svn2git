@@ -17,9 +17,8 @@ svn-revs:
         text: "x\n"
 
 conv-params: |
-  tags:
-    - tags/*
-  head: tags/t1
+  tags = ["tags/*"]
+  head = "tags/t1"
 
 git-revs:
   - rev: tags/t1~0

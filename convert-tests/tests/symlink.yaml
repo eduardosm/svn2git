@@ -20,8 +20,7 @@ svn-revs:
         text: "link target2"
 
 conv-params: |
-  branches:
-    - trunk
+  branches = ["trunk"]
 
 git-revs:
   - rev: trunk~1

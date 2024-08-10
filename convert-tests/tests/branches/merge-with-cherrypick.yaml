@@ -90,12 +90,12 @@ svn-revs:
         text: "file E\n"
 
 conv-params: |
-  branches:
-    - trunk
-    - branches/*
-  rename-branches:
-    trunk: master
-    branches/*: "*"
+  branches = [
+    "trunk",
+    "branches/*",
+  ]
+  rename-branches."trunk" = "master"
+  rename-branches."branches/*" = "*"
 
 logs: |
   D svn2git::convert::stage2: emitting branch commits and tags for SVN revision 9

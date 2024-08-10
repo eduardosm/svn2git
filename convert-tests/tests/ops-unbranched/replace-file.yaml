@@ -15,7 +15,7 @@ svn-revs:
         text: "replaced\n"
 
 conv-params: |
-  head: ""
+  head = ""
 
 git-revs:
   - rev: unbranched~1

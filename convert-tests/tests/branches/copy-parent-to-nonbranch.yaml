@@ -28,9 +28,8 @@ svn-revs:
         copy-from-path: branches1
 
 conv-params: |
-  branches:
-    - branches1/*
-  head: branches1/b1
+  branches = ["branches1/*"]
+  head = "branches1/b1"
 
 logs: |
   D svn2git::convert::stage1: importing SVN revision 2

@@ -66,14 +66,14 @@ fn main_inner() -> Result<(), RunError> {
         return Err(RunError::Generic);
     }
 
-    let params_raw = match std::fs::read(&args.conv_params) {
+    let params_raw = match std::fs::read_to_string(&args.conv_params) {
         Ok(r) => r,
         Err(e) => {
             eprintln!("failed to read {:?}: {e}", args.conv_params);
             return Err(RunError::Generic);
         }
     };
-    let params: params_file::ConvParams = match serde_yaml::from_slice(&params_raw) {
+    let params: params_file::ConvParams = match toml::from_str(&params_raw) {
         Ok(r) => r,
         Err(e) => {
             eprintln!("failed to parse {:?}: {e}", args.conv_params);

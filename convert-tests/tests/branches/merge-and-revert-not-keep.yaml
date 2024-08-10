@@ -61,13 +61,14 @@ svn-revs:
         action: delete
 
 conv-params: |
-  branches:
-    - trunk
-    - branches/*
-  rename-branches:
-    trunk: master
-    branches/*: "*"
-  avoid-fully-reverted-merges: true
+  branches = [
+    "trunk",
+    "branches/*",
+  ]
+  rename-branches."trunk" = "master"
+  rename-branches."branches/*" = "*"
+
+  avoid-fully-reverted-merges = true
 
 git-revs:
   - rev: master~4

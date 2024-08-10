@@ -47,7 +47,7 @@ svn-revs:
         text: "4\n"
 
 conv-params: |
-  head: ""
+  head = ""
 
 git-revs:
   - rev: unbranched~5

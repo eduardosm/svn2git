@@ -28,12 +28,13 @@ svn-revs:
         copy-from-path: ""
 
 conv-params: |
-  branches:
-    - branches/*
-    - backup/branches/*
-  rename-branches:
-    branches/*: "*"
-  head: branches/b1
+  branches = [
+    "branches/*",
+    "backup/branches/*",
+  ]
+  rename-branches."branches/*" = "*"
+
+  head = "branches/b1"
 
 git-revs:
   - rev: b1~0

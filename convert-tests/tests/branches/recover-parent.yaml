@@ -35,10 +35,11 @@ svn-revs:
         copy-from-path: branches1
 
 conv-params: |
-  branches:
-    - branches1/*
-    - branches2/*
-  head: branches2/b1
+  branches = [
+    "branches1/*",
+    "branches2/*",
+  ]
+  head = "branches2/b1"
 
 git-revs:
   - rev: deleted/branches1/b1~0

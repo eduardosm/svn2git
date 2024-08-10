@@ -25,10 +25,11 @@ svn-revs:
         copy-from-path: trunk
 
 conv-params: |
-  branches:
-    - trunk
-    - trunk2
-  head: trunk2
+  branches = [
+    "trunk",
+    "trunk2",
+  ]
+  head = "trunk2"
 
 git-revs:
   - rev: deleted/trunk~0

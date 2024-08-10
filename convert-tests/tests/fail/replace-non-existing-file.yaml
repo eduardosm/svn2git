@@ -14,8 +14,7 @@ svn-revs:
         text: "x\n"
 
 conv-params: |
-  branches:
-    - trunk
+  branches = ["trunk"]
 
 failed: true
 

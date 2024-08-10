@@ -31,15 +31,13 @@ svn-revs:
         copy-from-path: tags/t1
 
 conv-params: |
-  branches:
-    - trunk
-  rename-branches:
-    trunk: master
-  tags:
-    - tags/*
-  rename-tags:
-    tags/*: "*"
-  head: trunk
+  branches = ["trunk"]
+  rename-branches."trunk" = "master"
+
+  tags = ["tags/*"]
+  rename-tags."tags/*" = "*"
+
+  head = "trunk"
 
 git-tags:
   - tag: t1

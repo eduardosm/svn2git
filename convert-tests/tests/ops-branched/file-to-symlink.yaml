@@ -47,8 +47,7 @@ svn-revs:
         text: "link target3"
 
 conv-params: |
-  branches:
-    - trunk
+  branches = ["trunk"]
 
 git-revs:
   - rev: trunk~4

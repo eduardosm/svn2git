@@ -18,8 +18,7 @@ svn-revs:
         copy-from-path: trunk/x
 
 conv-params: |
-  branches:
-    - trunk
+  branches = ["trunk"]
 
 failed: true
 

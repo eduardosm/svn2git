@@ -27,8 +27,7 @@ svn-revs:
         text: "y\n"
 
 conv-params: |
-  branches:
-    - trunk
+  branches = ["trunk"]
 
 logs: |
   D svn2git::convert::stage1: importing SVN revision 3

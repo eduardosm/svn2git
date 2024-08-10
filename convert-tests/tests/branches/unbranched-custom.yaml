@@ -15,8 +15,8 @@ svn-revs:
         text: "y\n"
 
 conv-params: |
-  head: ""
-  unbranched-name: onebranch
+  head = ""
+  unbranched-name = "onebranch"
 
 git-revs:
   - rev: onebranch~1

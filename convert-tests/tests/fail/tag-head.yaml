@@ -24,15 +24,13 @@ svn-revs:
         copy-from-path: trunk
 
 conv-params: |
-  branches:
-    - trunk
-  tags:
-    - tags/*
-  rename-branches:
-    trunk: master
-  rename-tags:
-    tags/*: "*"
-  head: tags/t1
+  branches = ["trunk"]
+  rename-branches."trunk" = "master"
+
+  tags = ["tags/*"]
+  rename-tags."tags/*" = "*"
+
+  head = "tags/t1"
 
 logs: |
   E svn2git::convert::stage1: head "tags/t1" is a tag

@@ -23,7 +23,7 @@ pub(crate) fn run_test(test_path: &Path) -> Result<(), String> {
             .map_err(|e| format!("failed to write {user_map_path:?}: {e}"))?;
     }
 
-    let conv_params_path = temp_dir.join("conv-params.yaml");
+    let conv_params_path = temp_dir.join("conv-params.toml");
     std::fs::write(&conv_params_path, test_def.conv_params.as_bytes())
         .map_err(|e| format!("failed to write {conv_params_path:?}: {e}"))?;
 
