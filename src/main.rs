@@ -198,7 +198,7 @@ fn main_inner() -> Result<(), RunError> {
         .commit_msg_template
         .as_deref()
         .unwrap_or(indoc::indoc! {r#"
-            {% if svn_log %}{{ svn_log|conv_crlf }}
+            {% if svn_log %}{{ svn_log }}
 
             {% endif %}[[SVN revision: {{ svn_rev }}]]{% if svn_path %}
             [[SVN path: {{ svn_path }}]]{% endif %}
@@ -207,7 +207,7 @@ fn main_inner() -> Result<(), RunError> {
         .tag_msg_template
         .as_deref()
         .unwrap_or(indoc::indoc! {r#"
-           {% if svn_log %}{{ svn_log|conv_crlf }}
+           {% if svn_log %}{{ svn_log }}
 
            {% endif %}[[SVN revision: {{ svn_rev }}]]
            [[SVN path: {{ svn_path }}]]
