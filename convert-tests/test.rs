@@ -562,11 +562,14 @@ fn check_git_rev(git_repo: &gix::Repository, git_rev: &defs::GitRev) -> Result<(
     }
 
     if let Some(ref expected_tree) = git_rev.tree {
-        let tree = commit
-            .tree()
-            .map_err(|e| format!("failed to get tree: {e}"))?;
-
-        check_git_tree(&tree, expected_tree)?;
+        let tree_id = commit
+            .tree_id()
+            .map_err(|e| format!("failed to get tree ID: {e}"))?;
+        let expected_tree = expected_tree
+            .iter()
+            .map(|(k, v)| (k.as_bytes(), v))
+            .collect();
+        check_git_tree(tree_id, &expected_tree)?;
     }
 
     Ok(())
@@ -622,119 +625,135 @@ fn check_git_signature(
 }
 
 fn check_git_tree(
-    git_tree: &gix::Tree<'_>,
-    expected: &BTreeMap<String, defs::GitTreeEntry>,
+    git_root_tree_id: gix::Id<'_>,
+    expected: &BTreeMap<&[u8], &defs::GitTreeEntry>,
 ) -> Result<(), String> {
-    let mut num_entries = 0usize;
-    for entry in git_tree.iter() {
-        let entry = entry.map_err(|e| format!("failed to iterate over tree entries: {e}"))?;
-        num_entries += 1;
-        let entry_name = entry.filename();
-        if let Some(expected_entry) = expected.get(entry_name) {
+    let mut git_entries = BTreeMap::new();
+    let mut tree_queue = Vec::new();
+
+    tree_queue.push((vec![], git_root_tree_id));
+    while let Some((tree_path, tree_id)) = tree_queue.pop() {
+        let git_tree = tree_id
+            .object()
+            .map_err(|e| format!("failed to get git object {tree_id}: {e}"))?
+            .try_into_tree()
+            .map_err(|e| format!("failed to convert git object {tree_id} to tree: {e}"))?;
+
+        for entry in git_tree.iter() {
+            let entry = entry.map_err(|e| format!("failed to iterate over tree entries: {e}"))?;
             let mode = entry.mode();
-            match expected_entry {
-                defs::GitTreeEntry::Normal {
-                    data: expected_data,
-                } => {
-                    if !mode.is_blob() || mode.is_executable() {
-                        return Err(format!(
-                            "entry \"{}\" with mode {:o} was expected to be a regular file",
-                            entry_name.escape_ascii(),
-                            mode.kind() as u16,
-                        ));
-                    }
 
-                    let entry_obj = entry
-                        .object()
-                        .map_err(|e| format!("failed to convert tree entry to object: {e}"))?;
-                    let blob = entry_obj.into_blob();
-                    if blob.data != expected_data.as_bytes() {
-                        return Err(format!(
-                            "incorrect data in entry \"{}\": expected: \"{}\"\nactual: \"{}\"",
-                            entry_name.escape_ascii(),
-                            expected_data.as_bytes().escape_ascii(),
-                            blob.data.escape_ascii(),
-                        ));
-                    }
-                }
-                defs::GitTreeEntry::Exec {
-                    data: expected_data,
-                } => {
-                    if !mode.is_blob() || !mode.is_executable() {
-                        return Err(format!(
-                            "entry \"{}\" with mode {} was expected to be an executable file",
-                            entry_name.escape_ascii(),
-                            mode.kind().as_octal_str(),
-                        ));
-                    }
+            let mut entry_path = tree_path.clone();
+            entry_path.push(entry.filename().to_owned());
 
-                    let entry_obj = entry
-                        .object()
-                        .map_err(|e| format!("failed to convert tree entry to object: {e}"))?;
-                    let blob = entry_obj.into_blob();
-                    if blob.data != expected_data.as_bytes() {
-                        return Err(format!(
-                            "incorrect data in entry \"{}\": expected: \"{}\"\nactual: \"{}\"",
-                            entry_name.escape_ascii(),
-                            expected_data.as_bytes().escape_ascii(),
-                            blob.data.escape_ascii(),
-                        ));
-                    }
-                }
-                defs::GitTreeEntry::Symlink {
-                    target: expected_target,
-                } => {
-                    if !mode.is_link() {
-                        return Err(format!(
-                            "entry \"{}\" with mode {} was expected to be a symbolic link",
-                            entry_name.escape_ascii(),
-                            mode.kind().as_octal_str(),
-                        ));
-                    }
-
-                    let entry_obj = entry
-                        .object()
-                        .map_err(|e| format!("failed to convert tree entry to object: {e}"))?;
-                    let blob = entry_obj.into_blob();
-                    if blob.data != expected_target.as_bytes() {
-                        return Err(format!(
-                            "incorrect data in entry \"{}\": expected: \"{}\"\nactual: \"{}\"",
-                            entry_name.escape_ascii(),
-                            expected_target.as_bytes().escape_ascii(),
-                            blob.data.escape_ascii(),
-                        ));
-                    }
-                }
-                defs::GitTreeEntry::Dir {
-                    items: expected_sub_items,
-                } => {
-                    if !mode.is_tree() {
-                        return Err(format!(
-                            "entry \"{}\" with mode {} was expected to be a directory",
-                            entry_name.escape_ascii(),
-                            mode.kind().as_octal_str(),
-                        ));
-                    }
-
-                    let entry_obj = entry
-                        .object()
-                        .map_err(|e| format!("failed to convert tree entry to object: {e}"))?;
-                    let sub_tree = entry_obj.into_tree();
-                    check_git_tree(&sub_tree, expected_sub_items)?;
-                }
+            if mode.is_tree() {
+                tree_queue.push((entry_path.clone(), entry.id()));
             }
-        } else {
-            return Err(format!(
-                "unexpected entry: \"{}\"",
-                entry_name.escape_ascii(),
-            ));
+
+            let entry_path = entry_path.join(b"/".as_slice());
+            let prev = git_entries.insert(entry_path, (mode, entry.id()));
+            assert!(prev.is_none());
         }
     }
-    if num_entries != expected.len() {
-        return Err(format!(
-            "mismatched number of tree entries: expected {}, got {num_entries}",
-            expected.len(),
-        ));
+
+    for (entry_path, (entry_mode, entry_id)) in git_entries.iter() {
+        let Some(expected_entry) = expected.get(entry_path.as_slice()) else {
+            return Err(format!(
+                "unexpected tree entry: \"{}\"",
+                entry_path.escape_ascii(),
+            ));
+        };
+
+        match expected_entry {
+            defs::GitTreeEntry::Normal {
+                data: expected_data,
+            } => {
+                if !entry_mode.is_blob() || entry_mode.is_executable() {
+                    return Err(format!(
+                        "entry \"{}\" with mode {:o} was expected to be a regular file",
+                        entry_path.escape_ascii(),
+                        entry_mode.kind() as u16,
+                    ));
+                }
+
+                let entry_obj = entry_id
+                    .object()
+                    .map_err(|e| format!("failed to convert tree entry to object: {e}"))?;
+                let blob = entry_obj.into_blob();
+                if blob.data != expected_data.as_bytes() {
+                    return Err(format!(
+                        "incorrect data in entry \"{}\": expected: \"{}\"\nactual: \"{}\"",
+                        entry_path.escape_ascii(),
+                        expected_data.as_bytes().escape_ascii(),
+                        blob.data.escape_ascii(),
+                    ));
+                }
+            }
+            defs::GitTreeEntry::Exec {
+                data: expected_data,
+            } => {
+                if !entry_mode.is_blob() || !entry_mode.is_executable() {
+                    return Err(format!(
+                        "entry \"{}\" with mode {} was expected to be an executable file",
+                        entry_path.escape_ascii(),
+                        entry_mode.kind().as_octal_str(),
+                    ));
+                }
+
+                let entry_obj = entry_id
+                    .object()
+                    .map_err(|e| format!("failed to convert tree entry to object: {e}"))?;
+                let blob = entry_obj.into_blob();
+                if blob.data != expected_data.as_bytes() {
+                    return Err(format!(
+                        "incorrect data in entry \"{}\": expected: \"{}\"\nactual: \"{}\"",
+                        entry_path.escape_ascii(),
+                        expected_data.as_bytes().escape_ascii(),
+                        blob.data.escape_ascii(),
+                    ));
+                }
+            }
+            defs::GitTreeEntry::Symlink {
+                target: expected_target,
+            } => {
+                if !entry_mode.is_link() {
+                    return Err(format!(
+                        "entry \"{}\" with mode {} was expected to be a symbolic link",
+                        entry_path.escape_ascii(),
+                        entry_mode.kind().as_octal_str(),
+                    ));
+                }
+
+                let entry_obj = entry_id
+                    .object()
+                    .map_err(|e| format!("failed to convert tree entry to object: {e}"))?;
+                let blob = entry_obj.into_blob();
+                if blob.data != expected_target.as_bytes() {
+                    return Err(format!(
+                        "incorrect data in entry \"{}\": expected: \"{}\"\nactual: \"{}\"",
+                        entry_path.escape_ascii(),
+                        expected_target.as_bytes().escape_ascii(),
+                        blob.data.escape_ascii(),
+                    ));
+                }
+            }
+            defs::GitTreeEntry::Dir { .. } => {
+                if !entry_mode.is_tree() {
+                    return Err(format!(
+                        "entry \"{}\" with mode {} was expected to be a directory",
+                        entry_path.escape_ascii(),
+                        entry_mode.kind().as_octal_str(),
+                    ));
+                }
+            }
+        }
     }
+
+    for &entry_path in expected.keys() {
+        if !git_entries.contains_key(entry_path) {
+            return Err(format!("missing entry {entry_path:?}"));
+        }
+    }
+
     Ok(())
 }

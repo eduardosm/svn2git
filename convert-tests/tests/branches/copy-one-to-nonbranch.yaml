@@ -50,10 +50,8 @@ git-revs:
     tree:
       branches:
         type: dir
-        items:
-          b1:
-            type: dir
-            items:
-              x:
-                type: normal
-                data: "x\n"
+      branches/b1:
+        type: dir
+      branches/b1/x:
+        type: normal
+        data: "x\n"

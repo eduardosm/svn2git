@@ -26,7 +26,6 @@ git-revs:
         data: "x\n"
       directory:
         type: dir
-        items:
-          y:
-            type: normal
-            data: "y\n"
+      directory/y:
+        type: normal
+        data: "y\n"

@@ -48,7 +48,6 @@ git-revs:
         data: "y\n"
       directory:
         type: dir
-        items:
-          z:
-            type: normal
-            data: "z\n"
+      directory/z:
+        type: normal
+        data: "z\n"
