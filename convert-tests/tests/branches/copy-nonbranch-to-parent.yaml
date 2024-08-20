@@ -42,19 +42,16 @@ git-revs:
     tree:
       branches1:
         type: dir
-        items:
-          b1:
-            type: dir
-            items:
-              x:
-                type: normal
-                data: "file x\n"
-          b2:
-            type: dir
-            items:
-              y:
-                type: normal
-                data: "file y\n"
+      branches1/b1:
+        type: dir
+      branches1/b1/x:
+        type: normal
+        data: "file x\n"
+      branches1/b2:
+        type: dir
+      branches1/b2/y:
+        type: normal
+        data: "file y\n"
   - rev: branches2/b1~0
     parents: []
     tree:

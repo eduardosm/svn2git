@@ -173,9 +173,7 @@ pub(crate) enum GitTreeEntry {
     #[serde(rename = "symlink")]
     Symlink { target: String },
     #[serde(rename = "dir")]
-    Dir {
-        items: BTreeMap<String, GitTreeEntry>,
-    },
+    Dir,
 }
 
 pub(crate) struct Bytes(Vec<u8>);

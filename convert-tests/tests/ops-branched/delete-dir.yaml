@@ -27,9 +27,8 @@ git-revs:
     tree:
       dir:
         type: dir
-        items:
-          x:
-            type: normal
-            data: "file x\n"
+      dir/x:
+        type: normal
+        data: "file x\n"
   - rev: trunk~0
     tree: {}

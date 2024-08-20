@@ -42,10 +42,9 @@ git-revs:
     tree:
       trunk:
         type: dir
-        items:
-          x:
-            type: normal
-            data: "x\n"
+      trunk/x:
+        type: normal
+        data: "x\n"
   - rev: b1~0
     parents: []
     tree:
