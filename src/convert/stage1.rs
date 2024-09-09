@@ -767,7 +767,7 @@ impl Stage<'_> {
                                         );
                                         ConvertError
                                     })?;
-                                prev_meta_blob_oid = Some(meta_blob_oid)
+                                prev_meta_blob_oid = Some(meta_blob_oid);
                             }
 
                             let mut prev_meta = None;
