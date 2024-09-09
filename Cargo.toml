@@ -20,7 +20,7 @@ harness = false
 [dependencies]
 bzip2 = { version = "0.4.4", features = ["static"] }
 chrono = "0.4.37"
-clap = { version = "4.5.16", features = ["derive"] }
+clap = { version = "4.5.17", features = ["derive"] }
 crossterm = "0.28.1"
 cyclic-poly-23 = "0.3.1"
 flate2 = "1.0.33"
@@ -35,8 +35,8 @@ indoc = "2.0.5"
 liblzma = { version = "0.3.4", features = ["static"] }
 lru-mem = "0.3.0"
 lz4_flex = "0.11.3"
-minijinja = "2.1.2"
-serde = { version = "1.0.209", features = ["derive"] }
+minijinja = "2.2.0"
+serde = { version = "1.0.210", features = ["derive"] }
 smallvec = "1.13.2"
 toml = "0.8.19"
 tracing = "0.1.40"
