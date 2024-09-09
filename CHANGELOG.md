@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1 (2024-09-09)
+
+### Changed
+
+- Improved error message on failure to open the Subversion source.
+
 ## 0.2.0 (2024-08-10)
 
 ### Breaking
