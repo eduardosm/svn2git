@@ -30,7 +30,7 @@ pub(super) fn run(
     let mut svn_dump_src = match svn::source::DumpSource::open(src_path) {
         Ok(r) => r,
         Err(e) => {
-            tracing::error!("failed to open SVN dump source: {e:?}");
+            tracing::error!("failed to open SVN dump source: {e}");
             return Err(ConvertError);
         }
     };
