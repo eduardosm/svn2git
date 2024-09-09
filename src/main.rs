@@ -173,7 +173,7 @@ fn main_inner() -> Result<(), RunError> {
                 })?;
                 conv_params_path_parent.join(user_map_path)
             } else {
-                user_map_path.to_path_buf()
+                user_map_path.clone()
             };
 
             let user_map_file = std::fs::OpenOptions::new()

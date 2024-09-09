@@ -51,7 +51,7 @@ impl UserMap {
 
             match parse_line(&line) {
                 Some(Some((user, entry))) => {
-                    map.entry(user.to_vec()).or_default().push(entry);
+                    map.entry(user.clone()).or_default().push(entry);
                 }
                 Some(None) => {}
                 None => return Err(AuthorMapParseError::BadLine(line_i, line)),
