@@ -27,7 +27,7 @@ impl TempStorage {
             .write(true)
             .open(&path)
             .map_err(|e| ImportError::CreateFileError {
-                path: path.to_path_buf(),
+                path: path.clone(),
                 error: e,
             })?;
 
