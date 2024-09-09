@@ -4,7 +4,6 @@ use std::path::PathBuf;
 
 use crate::pipe;
 
-#[allow(dead_code, clippy::enum_variant_names)]
 #[derive(Debug)]
 pub(crate) enum OpenError {
     MetadataFetchError {
@@ -27,6 +26,28 @@ pub(crate) enum OpenError {
         arg0: OsString,
         error: std::io::Error,
     },
+}
+
+impl std::fmt::Display for OpenError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::MetadataFetchError { path, error } => {
+                write!(f, "failed to fetch metadata for {path:?}: {error}")
+            }
+            Self::FileOpenError { path, error } => {
+                write!(f, "failed to open file {path:?}: {error}")
+            }
+            Self::FileReadError { path, error } => {
+                write!(f, "failed to read file {path:?}: {error}")
+            }
+            Self::FileSeekError { path, error } => {
+                write!(f, "failed to seek file {path:?}: {error}")
+            }
+            Self::SpawnProcessError { arg0, error } => {
+                write!(f, "failed to spawn process {arg0:?}: {error}")
+            }
+        }
+    }
 }
 
 pub(crate) enum DumpSource {
