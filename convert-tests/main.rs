@@ -29,7 +29,7 @@ fn main() -> ExitCode {
     for test_path in tests_paths {
         let full_test_path = root_path.join(&test_path);
         tests.push(libtest_mimic::Trial::test(
-            test_path.to_string_lossy(),
+            test_path.display().to_string(),
             move || test::run_test(&full_test_path).map_err(|e| e.into()),
         ));
     }
