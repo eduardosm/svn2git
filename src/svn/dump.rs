@@ -523,14 +523,12 @@ fn parse_header(r: &mut dyn std::io::BufRead) -> Result<Option<RecordHeader>, Re
     }
     let mut map = HashMap::new();
     while buf != b"\n" {
-        let line = buf
-            .strip_suffix(b"\n")
-            .ok_or_else(|| ReadError::BrokenHeader)?;
+        let line = buf.strip_suffix(b"\n").ok_or(ReadError::BrokenHeader)?;
 
         let sep_pos = line
             .windows(2)
             .position(|n| n == b": ")
-            .ok_or_else(|| ReadError::BrokenHeader)?;
+            .ok_or(ReadError::BrokenHeader)?;
         map.insert(line[..sep_pos].to_vec(), line[(sep_pos + 2)..].to_vec());
 
         buf.clear();

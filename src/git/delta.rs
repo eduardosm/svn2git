@@ -153,7 +153,7 @@ pub(super) struct DeltaTable<'a> {
     mask: u32,
 }
 
-impl<'a> DeltaTable<'a> {
+impl DeltaTable<'_> {
     fn insert(&mut self, hash: u32, offset: usize) {
         let entry = &mut self.table[(hash & self.mask) as usize];
         if *entry == u32::MAX {

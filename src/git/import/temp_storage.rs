@@ -119,7 +119,7 @@ impl TempStorage {
         let info = self
             .info
             .get(obj_id)
-            .ok_or_else(|| ImportError::ObjectNotFound { id: obj_id })?;
+            .ok_or(ImportError::ObjectNotFound { id: obj_id })?;
 
         if let Some(data) = self.cache.get(info.offset) {
             return Ok((info.kind, data));
@@ -143,7 +143,7 @@ impl TempStorage {
         let info = self
             .info
             .get(obj_id)
-            .ok_or_else(|| ImportError::ObjectNotFound { id: obj_id })?;
+            .ok_or(ImportError::ObjectNotFound { id: obj_id })?;
 
         if let Some(data) = self.cache.get(info.offset) {
             return Ok((info, data));
@@ -170,7 +170,7 @@ impl TempStorage {
         let info = self
             .info
             .get(obj_id)
-            .ok_or_else(|| ImportError::ObjectNotFound { id: obj_id })?;
+            .ok_or(ImportError::ObjectNotFound { id: obj_id })?;
 
         let data = read_decompress(&self.file.lock().unwrap(), &self.path, info.offset)?;
 
