@@ -61,6 +61,7 @@ rand = "0.8.5"
 serde_yaml = "0.9.34"
 
 [profile.release]
+strip = "debuginfo"
 panic = "abort"
 lto = true
 codegen-units = 1
