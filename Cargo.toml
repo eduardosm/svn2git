@@ -62,4 +62,5 @@ serde_yaml = "0.9.34"
 
 [profile.release]
 panic = "abort"
+lto = true
 codegen-units = 1
