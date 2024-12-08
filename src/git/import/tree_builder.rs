@@ -131,7 +131,7 @@ impl TreeBuilder {
                             tree: Self::read_tree(oid, importer)?,
                             base_oid: Some(oid),
                         };
-                        cur_tree = match entry {
+                        cur_tree = match *entry {
                             TreeBuilderEntry::SubTree { ref mut tree, .. } => tree,
                             TreeBuilderEntry::Entry(..) => unreachable!(),
                         };
@@ -153,7 +153,7 @@ impl TreeBuilder {
                         base_oid: None,
                     }
                 });
-                cur_tree = match entry {
+                cur_tree = match *entry {
                     TreeBuilderEntry::SubTree { ref mut tree, .. } => tree,
                     TreeBuilderEntry::Entry(..) => unreachable!(),
                 };
