@@ -122,11 +122,11 @@ pub(crate) fn run_test(test_path: &Path) -> Result<(), String> {
 fn get_tmp_dir() -> Result<PathBuf, String> {
     use rand::{Rng as _, SeedableRng as _};
 
-    let mut rng = rand::rngs::StdRng::from_entropy();
+    let mut rng = rand::rngs::StdRng::from_os_rng();
 
     loop {
         let mut path = PathBuf::from(env!("CARGO_TARGET_TMPDIR"));
-        path.push(format!("convert-test-{:08x}", rng.gen::<u32>()));
+        path.push(format!("convert-test-{:08x}", rng.random::<u32>()));
 
         match std::fs::create_dir(&path) {
             Ok(()) => {
