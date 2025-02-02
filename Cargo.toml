@@ -20,28 +20,28 @@ harness = false
 [dependencies]
 bzip2 = { version = "0.5.0", features = ["static"] }
 chrono = "0.4.39"
-clap = { version = "4.5.23", features = ["derive"] }
+clap = { version = "4.5.27", features = ["derive"] }
 crossterm = "0.28.1"
 cyclic-poly-23 = "0.3.1"
 flate2 = "1.0.35"
-gix-actor = "0.33.1"
+gix-actor = "0.33.2"
 gix-date = "0.9.3"
-gix-features = { version = "0.39.1", features = ["fast-sha1"] }
-gix-hash = "0.15.1"
-gix-object = "0.46.1"
-gix-pack = "0.56.0"
+gix-features = { version = "0.40.0", features = ["fast-sha1"] }
+gix-hash = "0.16.0"
+gix-object = "0.47.0"
+gix-pack = "0.57.0"
 hashbrown = "0.15.2"
 indoc = "2.0.5"
 liblzma = { version = "0.3.5", features = ["static"] }
 lru-mem = "0.3.0"
 lz4_flex = "0.11.3"
-minijinja = "2.5.0"
+minijinja = "2.7.0"
 serde = { version = "1.0.217", features = ["derive"] }
 smallvec = "1.13.2"
 toml = "0.8.19"
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
-uuid = "1.11.0"
+uuid = "1.12.1"
 zstd = "0.13.2"
 
 [dependencies.regex-automata]
@@ -55,9 +55,9 @@ default-features = false
 features = ["std"]
 
 [dev-dependencies]
-gix = "0.69.1"
+gix = "0.70.0"
 libtest-mimic = "0.8.1"
-rand = "0.8.5"
+rand = "0.9.0"
 serde_yaml = "0.9.34"
 
 [profile.release]
