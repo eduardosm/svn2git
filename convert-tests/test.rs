@@ -751,7 +751,10 @@ fn check_git_tree(
 
     for &entry_path in expected.keys() {
         if !git_entries.contains_key(entry_path) {
-            return Err(format!("missing entry {entry_path:?}"));
+            return Err(format!(
+                "missing tree entry: \"{}\"",
+                entry_path.escape_ascii(),
+            ));
         }
     }
 
