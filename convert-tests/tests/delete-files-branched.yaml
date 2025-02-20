@@ -20,18 +20,42 @@ svn-revs:
         kind: file
         action: add
         copy-from-path: trunk/y
+  - props:
+      svn:log: modify x, y and z
+    nodes:
+      - path: trunk/x
+        kind: file
+        action: change
+        text: "modified x\n"
+      - path: trunk/y
+        kind: file
+        action: change
+        text: "modified y\n"
+      - path: trunk/z
+        kind: file
+        action: change
+        text: "modified z\n"
+  - props:
+      svn:log: delete y and z
+    nodes:
+      - path: trunk/y
+        kind: file
+        action: delete
+      - path: trunk/z
+        kind: file
+        action: delete
 
 conv-params: |
   branches = ["trunk"]
   delete-files = ["**/y"]
 
 git-revs:
-  - rev: trunk~1
+  - rev: trunk~3
     tree:
       x:
         type: normal
         data: "file x\n"
-  - rev: trunk~0
+  - rev: trunk~2
     tree:
       x:
         type: normal
@@ -39,3 +63,16 @@ git-revs:
       z:
         type: normal
         data: "file y\n"
+  - rev: trunk~1
+    tree:
+      x:
+        type: normal
+        data: "modified x\n"
+      z:
+        type: normal
+        data: "modified z\n"
+  - rev: trunk~0
+    tree:
+      x:
+        type: normal
+        data: "modified x\n"
