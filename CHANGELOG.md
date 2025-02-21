@@ -7,6 +7,10 @@
 - Unbranched branch will not be created if `unbranched` is not specified in the
   conversion parameters file.
 
+### Other
+
+- MSRV has been bumped to 1.82.
+
 ## 0.2.1 (2024-09-09)
 
 ### Changed
