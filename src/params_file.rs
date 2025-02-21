@@ -18,8 +18,8 @@ pub(crate) struct ConvParams {
     pub(crate) keep_deleted_tags: bool,
     #[serde(default = "default_head")]
     pub(crate) head: String,
-    #[serde(rename = "unbranched-name", default = "default_unbranched_name")]
-    pub(crate) unbranched_name: String,
+    #[serde(rename = "unbranched-name")]
+    pub(crate) unbranched_name: Option<String>,
     #[serde(rename = "enable-merges", default = "true_")]
     pub(crate) enable_merges: bool,
     #[serde(rename = "merge-optional", default = "Vec::new")]
@@ -61,8 +61,4 @@ fn true_() -> bool {
 
 fn default_head() -> String {
     "trunk".into()
-}
-
-fn default_unbranched_name() -> String {
-    "unbranched".into()
 }

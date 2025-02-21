@@ -26,7 +26,6 @@ svn-revs:
 
 conv-params: |
   branches = ["trunk"]
-  unbranched-name = "unbranched"
 
 logs: |
   D svn2git::convert::stage1: importing SVN revision 1
@@ -36,7 +35,6 @@ logs: |
 
 git-refs:
   - refs/heads/trunk
-  - refs/heads/unbranched
 
 git-revs:
   - rev: trunk~0
@@ -45,14 +43,3 @@ git-revs:
       x:
         type: normal
         data: "x\n"
-  - rev: unbranched~0
-    parents: []
-    tree:
-      y:
-        type: normal
-        data: "y\n"
-      directory:
-        type: dir
-      directory/z:
-        type: normal
-        data: "z\n"

@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -23,6 +23,8 @@ pub(crate) struct Test {
     pub(crate) logs: Option<String>,
     #[serde(rename = "git-tags", default = "Vec::new")]
     pub(crate) git_tags: Vec<GitTag>,
+    #[serde(rename = "git-refs")]
+    pub(crate) git_refs: Option<BTreeSet<String>>,
     #[serde(rename = "git-revs", default = "Vec::new")]
     pub(crate) git_revs: Vec<GitRev>,
 }

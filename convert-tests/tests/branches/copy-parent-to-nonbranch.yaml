@@ -30,6 +30,7 @@ svn-revs:
 conv-params: |
   branches = ["branches1/*"]
   head = "branches1/b1"
+  unbranched-name = "unbranched"
 
 logs: |
   D svn2git::convert::stage1: importing SVN revision 2

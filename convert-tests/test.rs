@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
@@ -101,6 +101,29 @@ pub(crate) fn run_test(test_path: &Path) -> Result<(), String> {
 
         let git_repo = gix::open(&git_repo_path)
             .map_err(|e| format!("failed to open git repository {git_repo_path:?}: {e}"))?;
+
+        if let Some(ref expected_git_refs) = test_def.git_refs {
+            let mut actual_git_refs = BTreeSet::new();
+
+            let refs = git_repo
+                .refs
+                .iter()
+                .map_err(|e| format!("failed to get git refs: {e}"))?;
+            let refs_iter = refs
+                .all()
+                .map_err(|e| format!("failed to get git refs: {e}"))?;
+            for ref_ in refs_iter {
+                let ref_ = ref_.map_err(|e| format!("failed to get git refs: {e}"))?;
+                actual_git_refs.insert(ref_.name.to_string());
+            }
+
+            if actual_git_refs != *expected_git_refs {
+                return Err(format!(
+                    "unexpected git refs:\nactual: {:?}\nexpected: {:?}",
+                    actual_git_refs, expected_git_refs,
+                ));
+            }
+        }
 
         for git_tag in test_def.git_tags.iter() {
             check_git_tag(&git_repo, git_tag)

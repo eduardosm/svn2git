@@ -78,10 +78,11 @@
   head = ""
   ```
 
-* `unbranched-name` (default: `unbranched`)
+* `unbranched-name`
 
   Specifies the name of the Git branch where everything that is not part of a
-  branch or a tag (as specified with `branches` or `tags`) will be placed.
+  branch or a tag (as specified with `branches` or `tags`) will be placed. If
+  not specified, these files will be discarded.
 
   <u>Example</u>
 

@@ -44,6 +44,7 @@ svn-revs:
 
 conv-params: |
   head = ""
+  unbranched-name = "unbranched"
   delete-files = ["**/y"]
 
 git-revs:

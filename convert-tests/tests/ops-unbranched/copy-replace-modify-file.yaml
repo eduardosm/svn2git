@@ -21,6 +21,7 @@ svn-revs:
 
 conv-params: |
   head = ""
+  unbranched-name = "unbranched"
 
 git-revs:
   - rev: unbranched~1
