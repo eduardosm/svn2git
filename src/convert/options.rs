@@ -1,12 +1,12 @@
 use std::borrow::Cow;
 
 use super::ConvertError;
+use crate::params_file::GitSvnParams;
 use crate::path_pattern::PathPattern;
 use crate::{FHashMap, FHashSet};
 
 pub(crate) struct InitOptions {
-    pub(crate) git_svn_mode: bool,
-    pub(crate) git_svn_url: Option<String>,
+    pub(crate) git_svn: Option<GitSvnParams>,
     pub(crate) keep_deleted_branches: bool,
     pub(crate) keep_deleted_tags: bool,
     pub(crate) head_path: Vec<u8>,
@@ -21,8 +21,7 @@ pub(crate) struct InitOptions {
 }
 
 pub(crate) struct Options {
-    pub(super) git_svn_mode: bool,
-    pub(super) git_svn_url: Option<String>,
+    pub(super) git_svn: Option<GitSvnParams>,
     root_dir_spec: ContainerDirSpecNode,
     pub(super) rename_branches: BranchRenamer,
     pub(super) keep_deleted_branches: bool,
@@ -66,8 +65,7 @@ pub(crate) struct PartialBranchAddError;
 impl Options {
     pub(crate) fn new(init: InitOptions) -> Self {
         Self {
-            git_svn_mode: init.git_svn_mode,
-            git_svn_url: init.git_svn_url,
+            git_svn: init.git_svn,
             root_dir_spec: ContainerDirSpecNode {
                 wildcard: None,
                 subdirs: FHashMap::default(),
@@ -370,8 +368,7 @@ mod tests {
 
     fn default_init() -> InitOptions {
         InitOptions {
-            git_svn_mode: false,
-            git_svn_url: None,
+            git_svn: None,
             keep_deleted_branches: true,
             keep_deleted_tags: true,
             head_path: b"trunk".to_vec(),
