@@ -120,7 +120,7 @@ fn pattern_to_hir(pattern: &str, full_path: bool) -> Result<regex_hir::Hir, Pars
 }
 
 pub(crate) struct PathPattern {
-    regex: regex_automata::meta::Regex,
+    regex: Option<regex_automata::meta::Regex>,
 }
 
 impl Default for PathPattern {
@@ -140,15 +140,25 @@ impl PathPattern {
             hirs.push(pattern_to_hir(pattern, full_path).map_err(|e| (pattern, e))?);
         }
 
-        let regex = regex_automata::meta::Builder::new()
-            .build_many_from_hir(&hirs)
-            .expect("failed to build regex");
+        if hirs.is_empty() {
+            Ok(Self { regex: None })
+        } else {
+            let regex = regex_automata::meta::Builder::new()
+                .build_many_from_hir(&hirs)
+                .expect("failed to build regex");
 
-        Ok(Self { regex })
+            Ok(Self { regex: Some(regex) })
+        }
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.regex.is_none()
     }
 
     pub(crate) fn is_match(&self, input: &[u8]) -> bool {
-        self.regex.is_match(input)
+        self.regex
+            .as_ref()
+            .is_some_and(|regex| regex.is_match(input))
     }
 }
 

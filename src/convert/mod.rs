@@ -50,6 +50,29 @@ pub(crate) fn convert(
     src_path: &std::path::Path,
     dst_path: &std::path::Path,
 ) -> Result<(), ConvertError> {
+    let mut options_ok = true;
+
+    if options.git_svn_mode {
+        if options.git_svn_url.is_none() {
+            tracing::error!("git-svn mode requires a repository URL");
+            options_ok = false;
+        }
+
+        if options.generate_gitignore {
+            tracing::error!("git-svn mode does not support generating .gitignore");
+            options_ok = false;
+        }
+
+        if !options.delete_files.is_empty() {
+            tracing::error!("git-svn mode does not support deleting files");
+            options_ok = false;
+        }
+    }
+
+    if !options_ok {
+        return Err(ConvertError);
+    }
+
     progress_print.set_progress("initializing git import".into());
 
     let mut git_import = git_wrap::Importer::init(dst_path, options.git_obj_cache_size)?;

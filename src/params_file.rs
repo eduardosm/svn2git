@@ -4,6 +4,10 @@ use std::path::PathBuf;
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ConvParams {
+    #[serde(rename = "git-svn-mode", default = "false_")]
+    pub(crate) git_svn_mode: bool,
+    #[serde(rename = "git-svn-url")]
+    pub(crate) git_svn_url: Option<String>,
     #[serde(default)]
     pub(crate) branches: Vec<String>,
     #[serde(rename = "rename-branches", default)]

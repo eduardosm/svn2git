@@ -4,6 +4,8 @@ use crate::path_pattern::PathPattern;
 use crate::{FHashMap, FHashSet};
 
 pub(crate) struct InitOptions {
+    pub(crate) git_svn_mode: bool,
+    pub(crate) git_svn_url: Option<String>,
     pub(crate) keep_deleted_branches: bool,
     pub(crate) keep_deleted_tags: bool,
     pub(crate) head_path: Vec<u8>,
@@ -18,6 +20,8 @@ pub(crate) struct InitOptions {
 }
 
 pub(crate) struct Options {
+    pub(super) git_svn_mode: bool,
+    pub(super) git_svn_url: Option<String>,
     root_dir_spec: ContainerDirSpecNode,
     pub(super) rename_branches: BranchRenamer,
     pub(super) keep_deleted_branches: bool,
@@ -61,6 +65,8 @@ pub(crate) struct PartialBranchAddError;
 impl Options {
     pub(crate) fn new(init: InitOptions) -> Self {
         Self {
+            git_svn_mode: init.git_svn_mode,
+            git_svn_url: init.git_svn_url,
             root_dir_spec: ContainerDirSpecNode {
                 wildcard: None,
                 subdirs: FHashMap::default(),
@@ -341,6 +347,8 @@ mod tests {
 
     fn default_init() -> InitOptions {
         InitOptions {
+            git_svn_mode: false,
+            git_svn_url: None,
             keep_deleted_branches: true,
             keep_deleted_tags: true,
             head_path: b"trunk".to_vec(),
