@@ -96,7 +96,9 @@ impl Stage<'_> {
 
         let mut ref_name_map = Vec::new();
         if !stage1_out.unbranched_rev_data.is_empty() {
-            ref_name_map.push((options.unbranched_name.clone(), None));
+            if let Some(ref unbranched_name) = options.unbranched_name {
+                ref_name_map.push((unbranched_name.clone(), None));
+            }
         }
 
         for (branch_i, branch_data) in stage1_out.branch_data.iter().enumerate() {
@@ -215,18 +217,20 @@ impl Stage<'_> {
     fn run_inner(&mut self, reachable_revs: &BTreeSet<usize>) -> Result<(), ConvertError> {
         tracing::info!("Emitting unbranched commits");
 
-        for i in 0..self.stage1_out.unbranched_rev_data.len() {
-            let svn_rev = self.stage1_out.root_rev_data
-                [self.stage1_out.unbranched_rev_data[i].root_rev]
-                .svn_rev;
-            tracing::debug!("emitting unbranched commit for SVN revision {svn_rev}");
-            self.progress_print.set_progress(format!(
-                "emitting branch commit - {} / {} (r{svn_rev})",
-                i + 1,
-                self.stage1_out.unbranched_rev_data.len(),
-            ));
+        if self.unbranched_name.is_some() {
+            for i in 0..self.stage1_out.unbranched_rev_data.len() {
+                let svn_rev = self.stage1_out.root_rev_data
+                    [self.stage1_out.unbranched_rev_data[i].root_rev]
+                    .svn_rev;
+                tracing::debug!("emitting unbranched commit for SVN revision {svn_rev}");
+                self.progress_print.set_progress(format!(
+                    "emitting branch commit - {} / {} (r{svn_rev})",
+                    i + 1,
+                    self.stage1_out.unbranched_rev_data.len(),
+                ));
 
-            self.make_unbranched_commit(i)?;
+                self.make_unbranched_commit(i)?;
+            }
         }
 
         tracing::info!("Emitting branch commits");

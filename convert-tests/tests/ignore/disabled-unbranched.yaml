@@ -70,6 +70,7 @@ svn-revs:
 
 conv-params: |
   branches = ["trunk"]
+  unbranched-name = "unbranched"
   generate-gitignore = false
 
 git-revs:

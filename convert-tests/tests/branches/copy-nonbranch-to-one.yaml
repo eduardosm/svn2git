@@ -28,6 +28,7 @@ conv-params: |
   rename-branches."branches/*" = "*"
 
   head = "branches/b1"
+  unbranched-name = "unbranched"
 
 logs: |
   D svn2git::convert::stage1: importing SVN revision 3

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0 (unreleased)
+
+### Breaking
+
+- Unbranched branch will not be created if `unbranched` is not specified in the
+  conversion parameters file.
+
 ## 0.2.1 (2024-09-09)
 
 ### Changed

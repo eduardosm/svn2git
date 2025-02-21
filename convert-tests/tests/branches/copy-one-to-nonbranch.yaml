@@ -26,6 +26,7 @@ svn-revs:
 conv-params: |
   branches = ["trunk"]
   rename-branches."trunk" = "master"
+  unbranched-name = "unbranched"
 
 logs: |
   D svn2git::convert::stage1: importing SVN revision 3
