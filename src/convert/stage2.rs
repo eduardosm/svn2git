@@ -278,6 +278,10 @@ impl Stage<'_> {
             .metadata_maker
             .make_git_commit_meta(
                 self.stage1_out.svn_uuid.as_ref(),
+                self.options
+                    .git_svn
+                    .as_ref()
+                    .map_or(String::new(), |p| p.url.clone()),
                 self.stage1_out.root_rev_data[root_commit].svn_rev,
                 None,
                 &self.stage1_out.root_rev_data[root_commit].svn_rev_props,
@@ -371,6 +375,10 @@ impl Stage<'_> {
             .metadata_maker
             .make_git_commit_meta(
                 self.stage1_out.svn_uuid.as_ref(),
+                self.options
+                    .git_svn
+                    .as_ref()
+                    .map_or(String::new(), |p| p.url.clone()),
                 self.stage1_out.root_rev_data[root_commit].svn_rev,
                 Some(branch_path),
                 &self.stage1_out.root_rev_data[root_commit].svn_rev_props,
@@ -429,6 +437,10 @@ impl Stage<'_> {
             .metadata_maker
             .make_git_tag_meta(
                 self.stage1_out.svn_uuid.as_ref(),
+                self.options
+                    .git_svn
+                    .as_ref()
+                    .map_or(String::new(), |p| p.url.clone()),
                 self.stage1_out.root_rev_data[root_commit].svn_rev,
                 branch_path,
                 &self.stage1_out.root_rev_data[root_commit].svn_rev_props,

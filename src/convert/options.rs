@@ -1,10 +1,12 @@
 use std::borrow::Cow;
 
 use super::ConvertError;
+use crate::params_file::GitSvnParams;
 use crate::path_pattern::PathPattern;
 use crate::{FHashMap, FHashSet};
 
 pub(crate) struct InitOptions {
+    pub(crate) git_svn: Option<GitSvnParams>,
     pub(crate) keep_deleted_branches: bool,
     pub(crate) keep_deleted_tags: bool,
     pub(crate) head_path: Vec<u8>,
@@ -21,6 +23,7 @@ pub(crate) struct InitOptions {
 pub(crate) struct Options {
     root_dir_spec: ContainerDirSpecNode,
     pub(super) rename_branches: BranchRenamer,
+    pub(crate) git_svn: Option<GitSvnParams>,
     pub(super) keep_deleted_branches: bool,
     pub(super) partial_branches: PartialBranchSet,
     pub(super) rename_tags: BranchRenamer,
@@ -67,6 +70,7 @@ impl Options {
                 subdirs: FHashMap::default(),
             },
             rename_branches: BranchRenamer::new(),
+            git_svn: init.git_svn,
             keep_deleted_branches: init.keep_deleted_branches,
             partial_branches: PartialBranchSet::new(),
             rename_tags: BranchRenamer::new(),
@@ -364,6 +368,7 @@ mod tests {
 
     fn default_init() -> InitOptions {
         InitOptions {
+            git_svn: None,
             keep_deleted_branches: true,
             keep_deleted_tags: true,
             head_path: b"trunk".to_vec(),
