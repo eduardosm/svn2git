@@ -1,7 +1,7 @@
 # svn2git
 
 [![GitHub Actions Status](https://github.com/eduardosm/svn2git/workflows/CI/badge.svg)](https://github.com/eduardosm/svn2git/actions)
-![MSRV](https://img.shields.io/badge/rustc-1.77+-lightgray.svg)
+![MSRV](https://img.shields.io/badge/rustc-1.82+-lightgray.svg)
 
 A Subversion to Git repository converter
 

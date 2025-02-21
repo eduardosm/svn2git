@@ -218,7 +218,7 @@ impl ChannelSender {
                 && queue
                     .size_sum
                     .checked_add(size)
-                    .map_or(true, |sum| sum > self.inner.max_size)
+                    .is_none_or(|sum| sum > self.inner.max_size)
             {
                 queue = self.inner.condvar.wait(queue).unwrap();
             } else {
