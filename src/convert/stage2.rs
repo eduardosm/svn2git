@@ -1,4 +1,5 @@
 use std::collections::{BTreeSet, VecDeque};
+use std::io::Write as _;
 
 use super::options::Options;
 use super::{ConvertError, GitMetaMaker, git_wrap, stage1};
@@ -290,6 +291,15 @@ impl Stage<'_> {
         let mut parents = smallvec::SmallVec::new();
         parents.extend(self.last_unbranched_commit);
 
+        let mut git_message = gix_object::bstr::BString::from(git_commit_meta.message);
+        if self.options.git_svn_mode {
+            self.add_git_svn_metadata(
+                &mut git_message,
+                b"",
+                self.stage1_out.root_rev_data[root_commit].svn_rev,
+            );
+        }
+
         let git_commit_oid = self.git_import.put(
             gix_object::Commit {
                 tree: unbranch_rev_data.tree_oid,
@@ -297,7 +307,7 @@ impl Stage<'_> {
                 author: git_commit_meta.author,
                 committer: git_commit_meta.committer,
                 encoding: None,
-                message: git_commit_meta.message.into(),
+                message: git_message,
                 extra_headers: vec![],
             },
             None,
@@ -384,6 +394,15 @@ impl Stage<'_> {
         parents.extend(parent_commit.map(|c| self.branch_rev_git_data[&c].git_commit_oid));
         parents.extend(git_merges);
 
+        let mut git_message = gix_object::bstr::BString::from(git_commit_meta.message);
+        if self.options.git_svn_mode {
+            self.add_git_svn_metadata(
+                &mut git_message,
+                branch_path,
+                self.stage1_out.root_rev_data[root_commit].svn_rev,
+            );
+        }
+
         let git_commit_oid = self.git_import.put(
             gix_object::Commit {
                 tree: branch_rev_data.tree_oid,
@@ -391,7 +410,7 @@ impl Stage<'_> {
                 author: git_commit_meta.author,
                 committer: git_commit_meta.committer,
                 encoding: None,
-                message: git_commit_meta.message.into(),
+                message: git_message,
                 extra_headers: vec![],
             },
             None,
@@ -414,6 +433,32 @@ impl Stage<'_> {
         tracing::debug!("committed on branch \"{}\"", branch_path.escape_ascii());
 
         Ok(())
+    }
+
+    fn add_git_svn_metadata(
+        &self,
+        git_message: &mut gix_object::bstr::BString,
+        branch_path: &[u8],
+        svn_rev: u32,
+    ) {
+        if !git_message.is_empty() {
+            if !git_message.ends_with(b"\n") {
+                git_message.push(b'\n');
+            }
+            git_message.push(b'\n');
+        }
+        git_message.extend(b"git-svn-id: ");
+        git_message.extend(self.options.git_svn_url.as_deref().unwrap().as_bytes());
+        if !branch_path.is_empty() {
+            git_message.push(b'/');
+            git_message.extend(branch_path);
+        }
+        git_message.push(b'@');
+        write!(git_message, "{svn_rev}").unwrap();
+        if let Some(svn_uuid) = self.stage1_out.svn_uuid {
+            git_message.push(b' ');
+            write!(git_message, "{svn_uuid}").unwrap();
+        }
     }
 
     fn make_branch_tag(&mut self, branch_rev: usize) -> Result<(), ConvertError> {
