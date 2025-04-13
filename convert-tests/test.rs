@@ -760,7 +760,7 @@ fn check_git_tree(
                     ));
                 }
             }
-            defs::GitTreeEntry::Dir { .. } => {
+            defs::GitTreeEntry::Dir => {
                 if !entry_mode.is_tree() {
                     return Err(format!(
                         "entry \"{}\" with mode {} was expected to be a directory",
