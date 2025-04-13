@@ -83,7 +83,8 @@ impl TempStorageThread {
         hash_kind: gix_hash::Kind,
         delta_base: Option<ObjectId>,
     ) -> Result<ObjectId, ImportError> {
-        let obj_id = gix_object::compute_hash(hash_kind, obj_kind, &raw_obj);
+        let obj_id = gix_object::compute_hash(hash_kind, obj_kind, &raw_obj)
+            .expect("SHA-1 collision attack detected");
 
         let mut inner = self.data.inner.lock().unwrap();
 

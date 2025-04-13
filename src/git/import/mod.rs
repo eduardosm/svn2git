@@ -463,7 +463,7 @@ fn write_pack_data(
             path: pack_data_tmp_path.clone(),
             error: e,
         })?;
-    let mut pack_data_file = gix_features::hash::Write::new(pack_data_file, hash_kind);
+    let mut pack_data_file = gix_hash::io::Write::new(pack_data_file, hash_kind);
 
     let mut pack_data_offset = 0;
 
@@ -528,7 +528,10 @@ fn write_pack_data(
         cb(ImportFinishProgress::Write(i + 1, num_objects));
     }
 
-    let pack_hash = ObjectId::Sha1(pack_data_file.hash.digest());
+    let pack_hash = pack_data_file
+        .hash
+        .try_finalize()
+        .expect("SHA-1 collision attack detected");
 
     let pack_data_file = pack_data_file.inner;
     file_write_all(&pack_data_file, &pack_data_tmp_path, pack_hash.as_bytes())?;
@@ -567,7 +570,7 @@ fn write_pack_index(
             error: e,
         })?;
     let pack_index_file = std::io::BufWriter::new(pack_index_file);
-    let mut pack_index_file = gix_features::hash::Write::new(pack_index_file, pack_hash.kind());
+    let mut pack_index_file = gix_hash::io::Write::new(pack_index_file, pack_hash.kind());
 
     // Pack header
     file_write_all(&mut pack_index_file, &pack_index_path, b"\xFFtOc")?;
@@ -632,7 +635,10 @@ fn write_pack_index(
     file_write_all(&mut pack_index_file, &pack_index_path, pack_hash.as_bytes())?;
 
     // Index checksum
-    let index_hash = ObjectId::Sha1(pack_index_file.hash.digest());
+    let index_hash = pack_index_file
+        .hash
+        .try_finalize()
+        .expect("SHA-1 collision attack detected");
     let mut pack_index_file = pack_index_file.inner;
 
     file_write_all(
