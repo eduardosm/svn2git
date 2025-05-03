@@ -57,7 +57,6 @@ impl crate::convert::GitMetaMaker for GitMetaMaker<'_> {
         let git_time = gix_date::Time {
             seconds: convert_date(date.as_ref()),
             offset: 0,
-            sign: gix_date::time::Sign::Plus,
         };
 
         let msg_template = self.jinja_env.get_template("commit_msg").unwrap();
@@ -108,7 +107,6 @@ impl crate::convert::GitMetaMaker for GitMetaMaker<'_> {
         let git_time = gix_date::Time {
             seconds: convert_date(date.as_ref()),
             offset: 0,
-            sign: gix_date::time::Sign::Plus,
         };
 
         let msg_template = self.jinja_env.get_template("tag_msg").unwrap();
