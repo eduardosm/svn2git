@@ -137,32 +137,7 @@ pub(crate) struct GitRev {
 pub(crate) struct GitSignature {
     pub(crate) name: String,
     pub(crate) email: String,
-    pub(crate) time: Option<GitTime>,
-}
-
-#[derive(serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct GitTime {
-    pub(crate) seconds: i64,
-    pub(crate) offset: u32,
-    pub(crate) sign: GitTimeSign,
-}
-
-#[derive(PartialEq, Eq, serde::Deserialize)]
-pub(crate) enum GitTimeSign {
-    #[serde(rename = "plus")]
-    Plus,
-    #[serde(rename = "minus")]
-    Minus,
-}
-
-impl std::fmt::Display for GitTimeSign {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            GitTimeSign::Plus => f.write_str("+"),
-            GitTimeSign::Minus => f.write_str("-"),
-        }
-    }
+    pub(crate) time: Option<String>,
 }
 
 #[derive(serde::Deserialize)]

@@ -43,17 +43,11 @@ git-revs:
     author:
       name: user1
       email: user1@14352404-68b8-472b-9260-315f1b4667fe
-      time:
-        seconds: 1287577815
-        offset: 0
-        sign: plus
+      time: 1287577815 +0000
     committer:
       name: user1
       email: user1@14352404-68b8-472b-9260-315f1b4667fe
-      time:
-        seconds: 1287577815
-        offset: 0
-        sign: plus
+      time: 1287577815 +0000
     message: |-
       first commit
 

@@ -475,16 +475,14 @@ fn check_git_tag(git_repo: &gix::Repository, git_tag: &defs::GitTag) -> Result<(
         .rev_parse_single(git_tag.rev.as_str())
         .map_err(|e| format!("failed to revparse {:?}: {e}", git_tag.rev))?;
 
-    let tag: gix::objs::Tag = parsed_tag
+    let tag_object = parsed_tag
         .object()
-        .map_err(|e| format!("failed to get object: {e}"))?
-        .try_into_tag()
-        .map_err(|e| format!("failed to get tag: {e}"))?
-        .decode()
-        .map_err(|e| format!("failed to decode tag: {e}"))?
-        .into();
+        .map_err(|e| format!("failed to get object: {e}"))?;
+    let tag = tag_object
+        .try_to_tag_ref()
+        .map_err(|e| format!("failed to get tag: {e}"))?;
 
-    if tag.target != parsed_rev {
+    if tag.target != parsed_rev.to_string() {
         return Err(format!(
             "tag {:?} does not point to {:?}",
             git_tag.tag, git_tag.rev,
@@ -493,7 +491,7 @@ fn check_git_tag(git_repo: &gix::Repository, git_tag: &defs::GitTag) -> Result<(
 
     if let Some(ref expected_tagger) = git_tag.tagger {
         let tagger = tag.tagger.as_ref().ok_or("tag does not have tagger")?;
-        check_git_signature("tagger", &tagger.to_ref(), expected_tagger)?;
+        check_git_signature("tagger", tagger, expected_tagger)?;
     }
 
     if let Some(ref expected_msg) = git_tag.message {
@@ -617,29 +615,10 @@ fn check_git_signature(
     }
 
     if let Some(ref expected_time) = expected.time {
-        if git_signature.time.seconds != expected_time.seconds {
+        if git_signature.time != expected_time {
             return Err(format!(
-                "unexpected {which} time seconds: {} != {}",
-                git_signature.time.seconds, expected_time.seconds,
-            ));
-        }
-
-        if git_signature.time.offset.unsigned_abs() != expected_time.offset {
-            return Err(format!(
-                "unexpected {which} time offset: {} != {}",
-                git_signature.time.offset, expected_time.offset,
-            ));
-        }
-
-        let sign = match git_signature.time.sign {
-            gix::date::time::Sign::Plus => defs::GitTimeSign::Plus,
-            gix::date::time::Sign::Minus => defs::GitTimeSign::Minus,
-        };
-
-        if sign != expected_time.sign {
-            return Err(format!(
-                "unexpected {which} time sign: {sign} != {}",
-                expected_time.sign,
+                "unexpected {which} time: {:?} != {:?}",
+                git_signature.time, expected_time,
             ));
         }
     }
