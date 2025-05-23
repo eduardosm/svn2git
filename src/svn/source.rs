@@ -167,10 +167,9 @@ impl DumpSource {
                 if exit_code.success() {
                     Ok(())
                 } else {
-                    Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!("process finished code {exit_code}"),
-                    ))
+                    Err(std::io::Error::other(format!(
+                        "process finished code {exit_code}"
+                    )))
                 }
             }
         }
