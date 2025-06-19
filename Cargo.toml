@@ -18,30 +18,30 @@ path = "convert-tests/main.rs"
 harness = false
 
 [dependencies]
-bzip2 = { version = "0.5.2", features = ["static"] }
+bzip2 = { version = "0.6.0", features = ["static"] }
 chrono = "0.4.41"
-clap = { version = "4.5.37", features = ["derive"] }
+clap = { version = "4.5.40", features = ["derive"] }
 crossterm = "0.29.0"
 cyclic-poly-23 = "0.3.1"
-flate2 = "1.1.1"
+flate2 = "1.1.2"
 gix-actor = "0.35.1"
-gix-date = "0.10.1"
+gix-date = "0.10.2"
 gix-features = "0.42.1"
 gix-hash = "0.18.0"
 gix-object = "0.49.1"
 gix-pack = "0.59.1"
-hashbrown = "0.15.3"
+hashbrown = "0.15.4"
 indoc = "2.0.6"
-liblzma = { version = "0.4.1", features = ["static"] }
+liblzma = { version = "0.4.2", features = ["static"] }
 lru-mem = "0.3.0"
-lz4_flex = "0.11.3"
-minijinja = "2.9.0"
+lz4_flex = "0.11.5"
+minijinja = "2.10.2"
 serde = { version = "1.0.219", features = ["derive"] }
-smallvec = "1.15.0"
-toml = "0.8.22"
+smallvec = "1.15.1"
+toml = "0.8.23"
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
-uuid = "1.16.0"
+uuid = "1.17.0"
 zstd = "0.13.3"
 
 [dependencies.regex-automata]
