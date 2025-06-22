@@ -60,6 +60,9 @@ libtest-mimic = "0.8.1"
 rand = "0.9.1"
 serde_yaml = "0.9.34"
 
+[profile.dev]
+opt-level = 1
+
 [profile.release]
 strip = "debuginfo"
 panic = "abort"
