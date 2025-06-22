@@ -1,11 +1,17 @@
 # Changelog
 
-## 0.3.0 (unreleased)
+## 0.3.0 (2025-06-22)
 
 ### Breaking
 
 - Unbranched branch will not be created if `unbranched` is not specified in the
   conversion parameters file.
+
+### Fixed
+
+- Fix incorrectly generated Git deltas for objects larger than 16777215 bytes
+  (2^24 - 1).
+- Fix panic when merging the creation commit of an unrelated branch.
 
 ### Other
 
