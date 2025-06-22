@@ -540,49 +540,49 @@ impl Stage<'_> {
                 continue;
             }
 
-            let mut parent = svn_merge;
-            let merged = loop {
-                parent = self.stage1_out.branch_rev_data[parent].parent.unwrap();
+            let merged = if self.stage1_out.branch_rev_data[svn_merge].tail
+                != self.stage1_out.branch_rev_data[branch_commit].tail
+            {
+                // Unrelated histories, do not merge
+                false
+            } else {
+                let mut parent = svn_merge;
+                loop {
+                    parent = self.stage1_out.branch_rev_data[parent].parent.unwrap();
 
-                if self.stage1_out.branch_rev_data[parent].tail
-                    != self.stage1_out.branch_rev_data[branch_commit].tail
-                {
-                    // Unrelated histories, do not merge
+                    if merged_history.contains(&parent) {
+                        // The parent of the cherry-pick is merged, so
+                        // the cherry-pick can be converted to merge.
+                        break true;
+                    }
+
+                    if !self.stage1_out.branch_rev_data[parent].required_in_mergeinfo {
+                        // Commit marked as not required in mergeinfo, so it will
+                        // not create a gap in the merged revision range although
+                        // it is missing from SVN mergeinfo.
+                        continue;
+                    }
+
+                    let is_merge_commit = !self.branch_rev_git_data[&parent].merges.is_empty()
+                        || !self.branch_rev_git_data[&parent].cherrypicks.is_empty();
+
+                    if is_merge_commit
+                        && self.branch_rev_git_data[&parent]
+                            .merges
+                            .is_subset(&merged_history)
+                        && self.branch_rev_git_data[&parent]
+                            .cherrypicks
+                            .is_subset(&merged_history)
+                    {
+                        // This commit is missing from mergeinfo, but the commit is a merge
+                        // whose merged/cherry-picked commits are already part of the destination
+                        // history, so we do not consider that it creates a gap.
+                        continue;
+                    }
+
+                    // There is a gap, the cherry-pick stays cherry-pick
                     break false;
                 }
-
-                if merged_history.contains(&parent) {
-                    // The parent of the cherry-pick is merged, so
-                    // the cherry-pick can be converted to merge.
-                    break true;
-                }
-
-                if !self.stage1_out.branch_rev_data[parent].required_in_mergeinfo {
-                    // Commit marked as not required in mergeinfo, so it will
-                    // not create a gap in the merged revision range although
-                    // it is missing from SVN mergeinfo.
-                    continue;
-                }
-
-                let is_merge_commit = !self.branch_rev_git_data[&parent].merges.is_empty()
-                    || !self.branch_rev_git_data[&parent].cherrypicks.is_empty();
-
-                if is_merge_commit
-                    && self.branch_rev_git_data[&parent]
-                        .merges
-                        .is_subset(&merged_history)
-                    && self.branch_rev_git_data[&parent]
-                        .cherrypicks
-                        .is_subset(&merged_history)
-                {
-                    // This commit is missing from mergeinfo, but the commit is a merge
-                    // whose merged/cherry-picked commits are already part of the destination
-                    // history, so we do not consider that it creates a gap.
-                    continue;
-                }
-
-                // There is a gap, the cherry-pick stays cherry-pick
-                break false;
             };
 
             if merged {
