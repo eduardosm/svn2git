@@ -406,15 +406,15 @@ mod tests {
     }
 
     #[test]
-    fn test_diff() {
-        fn test(base: &[u8], target: &[u8], window_shift: u32, expected: &[u8]) {
+    fn test_diff_and_patch() {
+        fn test(base: &[u8], target: &[u8], window_shift: u32, expected_diff: &[u8]) {
             let table = create_delta_table(base, window_shift);
             let diff = diff(&table, target).unwrap();
-            if diff != expected {
+            if diff != expected_diff {
                 panic!(
                     "\"{}\" != \"{}\"",
                     diff.escape_ascii(),
-                    expected.escape_ascii(),
+                    expected_diff.escape_ascii(),
                 );
             }
 
@@ -432,28 +432,50 @@ mod tests {
             b"This is a test for delta compression",
             b"There is a test for Delta compressioN",
             2,
-            b"\x24\x25\x05There\x91\x04\x0F\x01D\x91\x14\x0F\x01N",
+            &[
+                0x24, // Base length
+                0x25, // Target length
+                0x05, b'T', b'h', b'e', b'r', b'e', // Inline "There"
+                0x91, 0x04, 0x0F, // Offset 4, length 15
+                0x01, b'D', // Inline "D"
+                0x91, 0x14, 0x0F, // Offset 20, length 15
+                0x01, b'N', // Inline "N"
+            ],
         );
 
         test(
             b"_this is a test this is a test",
             b"this is a test this is a test",
             3,
-            b"\x1E\x1D\x91\x01\x1D",
+            &[
+                0x1E, // Base length
+                0x1D, // Target length
+                0x91, 0x01, 0x1D, // Offset 1, length 29
+            ],
         );
 
         test(
             b"_this is a test this is a test",
             b"this is a test:this is a test",
             3,
-            b"\x1E\x1D\x91\x10\x0E\x01:\x91\x10\x0E",
+            &[
+                0x1E, // Base length
+                0x1D, // Target length
+                0x91, 0x10, 0x0E, // Offset 16, length 14
+                0x01, b':', // Inline ":"
+                0x91, 0x10, 0x0E, // Offset 16, length 14
+            ],
         );
 
         test(
             b" is a test this is a test |This is a tesT This is a test",
             b"This is a tesT This is a test",
             3,
-            b"\x38\x1D\x91\x1B\x1D",
+            &[
+                0x38, // Base length
+                0x1D, // Target length
+                0x91, 0x1B, 0x1D, // Offset 27, length 29
+            ],
         );
     }
 }
