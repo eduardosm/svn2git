@@ -261,64 +261,77 @@ pub(super) fn diff(table: &DeltaTable<'_>, target: &[u8]) -> Option<Vec<u8>> {
             }
 
             let src_offset = src_range.start + (target_eff_start - target_range.start);
-            let src_len = src_range.end - src_offset;
 
-            let src_offset = u32::try_from(src_offset).unwrap();
-            let src_len = u32::try_from(src_len).unwrap_or(u32::MAX);
+            let mut src_len = src_range.end - src_offset;
+            let mut src_offset = u32::try_from(src_offset).unwrap();
 
-            chunks.push((target_eff_start, out.len()));
+            // Maximum source chunk length is 16777215 bytes (2^24 - 1),
+            // split into multiple if larger
+            let max_src_chunk_len = 0xFFFFFF;
+            while src_len != 0 {
+                let src_chunk_len = u32::try_from(src_len)
+                    .unwrap_or(u32::MAX)
+                    .min(max_src_chunk_len);
 
-            let mut op = 0x80;
-            if src_offset & 0xFF != 0 {
-                op |= 0x01;
-            }
-            if src_offset & 0xFF00 != 0 {
-                op |= 0x02;
-            }
-            if src_offset & 0xFF0000 != 0 {
-                op |= 0x04;
-            }
-            if src_offset & 0xFF000000 != 0 {
-                op |= 0x08;
-            }
-            if src_len != 0x10000 {
-                if src_len & 0xFF != 0 {
-                    op |= 0x10;
-                }
-                if src_len & 0xFF00 != 0 {
-                    op |= 0x20;
-                }
-                if src_len & 0xFF0000 != 0 {
-                    op |= 0x40;
-                }
-            }
+                chunks.push((target_eff_start, out.len()));
 
-            out.push(op);
-            if src_offset & 0xFF != 0 {
-                out.push(src_offset as u8);
-            }
-            if src_offset & 0xFF00 != 0 {
-                out.push((src_offset >> 8) as u8);
-            }
-            if src_offset & 0xFF0000 != 0 {
-                out.push((src_offset >> 16) as u8);
-            }
-            if src_offset & 0xFF000000 != 0 {
-                out.push((src_offset >> 24) as u8);
-            }
-            if src_len != 0x10000 {
-                if src_len & 0xFF != 0 {
-                    out.push(src_len as u8);
+                let mut op = 0x80;
+                if src_offset & 0xFF != 0 {
+                    op |= 0x01;
                 }
-                if src_len & 0xFF00 != 0 {
-                    out.push((src_len >> 8) as u8);
+                if src_offset & 0xFF00 != 0 {
+                    op |= 0x02;
                 }
-                if src_len & 0xFF0000 != 0 {
-                    out.push((src_len >> 16) as u8);
+                if src_offset & 0xFF0000 != 0 {
+                    op |= 0x04;
                 }
+                if src_offset & 0xFF000000 != 0 {
+                    op |= 0x08;
+                }
+                if src_chunk_len != 0x10000 {
+                    if src_chunk_len & 0xFF != 0 {
+                        op |= 0x10;
+                    }
+                    if src_chunk_len & 0xFF00 != 0 {
+                        op |= 0x20;
+                    }
+                    if src_chunk_len & 0xFF0000 != 0 {
+                        op |= 0x40;
+                    }
+                }
+
+                out.push(op);
+                if src_offset & 0xFF != 0 {
+                    out.push(src_offset as u8);
+                }
+                if src_offset & 0xFF00 != 0 {
+                    out.push((src_offset >> 8) as u8);
+                }
+                if src_offset & 0xFF0000 != 0 {
+                    out.push((src_offset >> 16) as u8);
+                }
+                if src_offset & 0xFF000000 != 0 {
+                    out.push((src_offset >> 24) as u8);
+                }
+                if src_chunk_len != 0x10000 {
+                    if src_chunk_len & 0xFF != 0 {
+                        out.push(src_chunk_len as u8);
+                    }
+                    if src_chunk_len & 0xFF00 != 0 {
+                        out.push((src_chunk_len >> 8) as u8);
+                    }
+                    if src_chunk_len & 0xFF0000 != 0 {
+                        out.push((src_chunk_len >> 16) as u8);
+                    }
+                }
+
+                target_eff_start += src_chunk_len as usize;
+                src_offset += src_chunk_len;
+                src_len -= src_chunk_len as usize;
             }
 
             target_handled = target_range.end;
+            assert_eq!(target_eff_start, target_handled);
 
             if target.len() - target_range.end < window_len {
                 break;
@@ -475,6 +488,34 @@ mod tests {
                 0x38, // Base length
                 0x1D, // Target length
                 0x91, 0x1B, 0x1D, // Offset 27, length 29
+            ],
+        );
+
+        // Test case larger than 2^24 bytes
+
+        let mut base = Vec::new();
+        base.push(b'0');
+        base.extend(std::iter::repeat_n(b'A', 5_000_000));
+        base.extend(std::iter::repeat_n(b'B', 5_000_000));
+        base.extend(std::iter::repeat_n(b'C', 5_000_000));
+        base.extend(std::iter::repeat_n(b'D', 5_000_000));
+
+        let mut target = Vec::new();
+        target.push(b'1');
+        target.extend(&base[1..]);
+        target.push(b'E');
+
+        test(
+            &base,
+            &target,
+            3,
+            &[
+                0x81, 0xDA, 0xC4, 0x09, // Base length
+                0x82, 0xDA, 0xC4, 0x09, // Target length
+                0x01, b'1', // Inline "1"
+                0xF1, 0x01, 0xFF, 0xFF, 0xFF, // Offset 1, length 16777215
+                0xF8, 0x01, 0x01, 0x2D, 0x31, // Offset 16777216, length 3222785
+                0x01, b'E', // Inline "E"
             ],
         );
     }
