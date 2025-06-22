@@ -1,0 +1,90 @@
+svn-revs:
+  - props:
+      svn:log: init directories
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+      - path: branches
+        kind: dir
+        action: add
+  - no: 2
+    props:
+      svn:log: create A
+    nodes:
+      - path: trunk/A
+        kind: file
+        action: add
+        text: "file A\n"
+  - no: 3
+    props:
+      svn:log: create B
+    nodes:
+      - path: trunk/B
+        kind: file
+        action: add
+        text: "file B\n"
+  - props:
+      svn:log: create branch b1 from trunk:2 and merge trunk:3
+    nodes:
+      - path: branches/b1
+        kind: dir
+        action: add
+        copy-from-path: trunk
+        copy-from-rev: 2
+        props:
+          svn:mergeinfo: |
+            /trunk:3
+      - path: branches/b1/A
+        kind: file
+        action: add
+        text: "file A\n"
+      - path: branches/b1/B
+        kind: file
+        action: add
+        text: "file B\n"
+
+conv-params: |
+  branches = [
+    "trunk",
+    "branches/*",
+  ]
+  rename-branches."trunk" = "master"
+  rename-branches."branches/*" = "*"
+
+logs: |
+  D svn2git::convert::stage1: importing SVN revision 4
+  D svn2git::convert::stage1: creating branch/tag "branches/b1" from "trunk"
+  D svn2git::convert::stage2: emitting branch commits and tags for SVN revision 4
+  D svn2git::convert::stage2: candidate to be merged: "trunk"@3
+  D svn2git::convert::stage2: merging into "branches/b1"
+  D svn2git::convert::stage2: committed on branch "branches/b1"
+
+git-revs:
+  - rev: master~2
+    parents: []
+    tree: {}
+  - rev: master~1
+    parents: [master~2]
+    tree:
+      A:
+        type: normal
+        data: "file A\n"
+  - rev: master~0
+    parents: [master~1]
+    tree:
+      A:
+        type: normal
+        data: "file A\n"
+      B:
+        type: normal
+        data: "file B\n"
+  - rev: b1~0
+    parents: [master~1, master~0]
+    tree:
+      A:
+        type: normal
+        data: "file A\n"
+      B:
+        type: normal
+        data: "file B\n"
