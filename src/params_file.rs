@@ -4,15 +4,15 @@ use std::path::PathBuf;
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ConvParams {
-    #[serde(default = "Vec::new")]
+    #[serde(default)]
     pub(crate) branches: Vec<String>,
-    #[serde(rename = "rename-branches", default = "HashMap::new")]
+    #[serde(rename = "rename-branches", default)]
     pub(crate) rename_branches: HashMap<String, String>,
     #[serde(rename = "keep-deleted-branches", default = "true_")]
     pub(crate) keep_deleted_branches: bool,
-    #[serde(default = "Vec::new")]
+    #[serde(default)]
     pub(crate) tags: Vec<String>,
-    #[serde(rename = "rename-tags", default = "HashMap::new")]
+    #[serde(rename = "rename-tags", default)]
     pub(crate) rename_tags: HashMap<String, String>,
     #[serde(rename = "keep-deleted-tags", default = "true_")]
     pub(crate) keep_deleted_tags: bool,
@@ -22,15 +22,15 @@ pub(crate) struct ConvParams {
     pub(crate) unbranched_name: Option<String>,
     #[serde(rename = "enable-merges", default = "true_")]
     pub(crate) enable_merges: bool,
-    #[serde(rename = "merge-optional", default = "Vec::new")]
+    #[serde(rename = "merge-optional", default)]
     pub(crate) merge_optional: Vec<String>,
     #[serde(rename = "avoid-fully-reverted-merges", default = "false_")]
     pub(crate) avoid_fully_reverted_merges: bool,
-    #[serde(rename = "ignore-merges", default = "Vec::new")]
+    #[serde(rename = "ignore-merges", default)]
     pub(crate) ignore_merges: Vec<BranchRev>,
     #[serde(rename = "generate-gitignore", default = "true_")]
     pub(crate) generate_gitignore: bool,
-    #[serde(rename = "delete-files", default = "Vec::new")]
+    #[serde(rename = "delete-files", default)]
     pub(crate) delete_files: Vec<String>,
     #[serde(rename = "user-map-file")]
     pub(crate) user_map_file: Option<PathBuf>,

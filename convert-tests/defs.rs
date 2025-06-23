@@ -21,11 +21,11 @@ pub(crate) struct Test {
     pub(crate) failed: bool,
     #[serde(rename = "logs")]
     pub(crate) logs: Option<String>,
-    #[serde(rename = "git-tags", default = "Vec::new")]
+    #[serde(rename = "git-tags", default)]
     pub(crate) git_tags: Vec<GitTag>,
     #[serde(rename = "git-refs")]
     pub(crate) git_refs: Option<BTreeSet<String>>,
-    #[serde(rename = "git-revs", default = "Vec::new")]
+    #[serde(rename = "git-revs", default)]
     pub(crate) git_revs: Vec<GitRev>,
 }
 
@@ -67,9 +67,9 @@ fn dump_version_2() -> SvnDumpVersion {
 #[serde(deny_unknown_fields)]
 pub(crate) struct SvnRev {
     pub(crate) no: Option<u32>,
-    #[serde(default = "BTreeMap::new")]
+    #[serde(default)]
     pub(crate) props: BTreeMap<String, String>,
-    #[serde(default = "Vec::new")]
+    #[serde(default)]
     pub(crate) nodes: Vec<SvnNode>,
 }
 
