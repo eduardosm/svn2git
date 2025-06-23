@@ -75,6 +75,11 @@ conv-params: |
 
   avoid-fully-reverted-merges = true
 
+logs: |
+  D svn2git::convert::stage1: modification on branch/tag "trunk"
+  D svn2git::convert::stage1: reverted 1 SVN merge(s)
+  D svn2git::convert::stage1: fully reverted merge made in "trunk"@6
+
 git-revs:
   - rev: master~4
     parents: []
