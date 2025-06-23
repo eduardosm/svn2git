@@ -1630,7 +1630,7 @@ impl Stage<'_> {
             ConvertError
         })?;
         drop(raw_meta);
-        let svn_mergeinfo = meta::parse_mergeinfo(&meta.mergeinfo, &meta.mergeinfo_integrated);
+        let svn_mergeinfo = meta::parse_mergeinfo(&meta.mergeinfo, &meta.svnmerge_integrated);
 
         let mut commit_history = Vec::new();
         let mut history_commit = Some(branch_tip_commit);
