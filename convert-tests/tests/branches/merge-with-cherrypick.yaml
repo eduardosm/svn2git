@@ -29,7 +29,8 @@ svn-revs:
         kind: file
         action: add
         text: "file B\n"
-  - props:
+  - no: 5
+    props:
       svn:log: create C
     nodes:
       - path: branches/b1/C
@@ -50,14 +51,16 @@ svn-revs:
         kind: file
         action: add
         text: "file D\n"
-  - props:
+  - no: 8
+    props:
       svn:log: create E
     nodes:
       - path: branches/b2/E
         kind: file
         action: add
         text: "file E\n"
-  - props:
+  - no: 9
+    props:
       svn:log: cherrypick from b2 into b1
     nodes:
       - path: branches/b1

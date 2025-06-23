@@ -29,7 +29,8 @@ svn-revs:
         kind: file
         action: change
         text: "file A 2\n"
-  - props:
+  - no: 5
+    props:
       svn:log: create B
     nodes:
       - path: branches/b1/B

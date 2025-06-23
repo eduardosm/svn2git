@@ -22,14 +22,16 @@ svn-revs:
         kind: dir
         action: add
         copy-from-path: trunk
-  - props:
+  - no: 4
+    props:
       svn:log: create B
     nodes:
       - path: branches/b1/B
         kind: file
         action: add
         text: "file B\n"
-  - props:
+  - no: 5
+    props:
       svn:log: create C
     nodes:
       - path: branches/b1/C
