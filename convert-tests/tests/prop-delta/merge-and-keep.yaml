@@ -75,6 +75,11 @@ conv-params: |
 
   avoid-fully-reverted-merges = true
 
+logs: |
+  D svn2git::convert::stage2: emitting branch commits and tags for SVN revision 6
+  D svn2git::convert::stage2: candidate to be merged: "branches/b1"@5
+  D svn2git::convert::stage2: merging into "trunk"
+
 git-revs:
   - rev: master~4
     parents: []
