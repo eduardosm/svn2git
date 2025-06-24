@@ -958,22 +958,7 @@ impl Stage<'_> {
             }
 
             if update_dir_metadata {
-                let meta_path = concat_path(&node_op.path, b".svn");
-                let (_, meta_blob_oid) = self
-                    .git_import
-                    .ls(meta_tree_oid, &meta_path)?
-                    .ok_or_else(|| {
-                        tracing::error!(
-                            "missing drectory metadata for \"{}\"",
-                            node_op.path.escape_ascii(),
-                        );
-                        ConvertError
-                    })?;
-                let raw_meta = self.git_import.get_blob(meta_blob_oid)?;
-                let meta = meta::DirMetadata::deserialize(&raw_meta).ok_or_else(|| {
-                    tracing::error!("failed to deserialize directory metadata");
-                    ConvertError
-                })?;
+                let meta = self.get_dir_meta(meta_tree_oid, &node_op.path)?;
 
                 if self.options.generate_gitignore {
                     let mut gitignore_data = Vec::<u8>::new();
@@ -1612,24 +1597,10 @@ impl Stage<'_> {
         branch_rev: usize,
         branch_tip_commit: usize,
     ) -> Result<(BTreeSet<usize>, BTreeSet<usize>), ConvertError> {
-        let meta_path = concat_path(&self.branch_data[branch].svn_path, b".svn");
-        let (_, meta_blob_oid) = self
-            .git_import
-            .ls(self.root_rev_data.last().unwrap().meta_tree_oid, &meta_path)?
-            .ok_or_else(|| {
-                tracing::error!(
-                    "missing directory metadata for \"{}\"",
-                    self.branch_data[branch].svn_path.escape_ascii(),
-                );
-                ConvertError
-            })?;
-        drop(meta_path);
-        let raw_meta = self.git_import.get_blob(meta_blob_oid)?;
-        let meta = meta::DirMetadata::deserialize(&raw_meta).ok_or_else(|| {
-            tracing::error!("failed to deserialize directory metadata");
-            ConvertError
-        })?;
-        drop(raw_meta);
+        let meta = self.get_dir_meta(
+            self.root_rev_data.last().unwrap().meta_tree_oid,
+            &self.branch_data[branch].svn_path,
+        )?;
         let svn_mergeinfo = meta::parse_mergeinfo(&meta.mergeinfo, &meta.svnmerge_integrated);
 
         let mut commit_history = Vec::new();
@@ -1770,6 +1741,29 @@ impl Stage<'_> {
         }
 
         Ok((added_svn_merges, removed_svn_merges))
+    }
+
+    fn get_dir_meta(
+        &self,
+        meta_tree_oid: gix_hash::ObjectId,
+        dir_path: &[u8],
+    ) -> Result<meta::DirMetadata, ConvertError> {
+        let meta_path = concat_path(dir_path, b".svn");
+        let (_, meta_blob_oid) =
+            self.git_import
+                .ls(meta_tree_oid, &meta_path)?
+                .ok_or_else(|| {
+                    tracing::error!(
+                        "missing directory metadata for \"{}\"",
+                        dir_path.escape_ascii(),
+                    );
+                    ConvertError
+                })?;
+        let raw_meta = self.git_import.get_blob(meta_blob_oid)?;
+        meta::DirMetadata::deserialize(&raw_meta).ok_or_else(|| {
+            tracing::error!("failed to deserialize directory metadata");
+            ConvertError
+        })
     }
 }
 
