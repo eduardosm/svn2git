@@ -160,6 +160,7 @@ pub(super) struct UnbranchedRevData {
 pub(super) struct BranchData {
     pub(super) svn_path: Vec<u8>,
     pub(super) is_tag: bool,
+    pub(super) partial_sub_path: Vec<u8>,
     pub(super) deleted: bool,
     pub(super) tip_commit: Option<usize>,
     pub(super) first_root_rev: usize,
@@ -1433,26 +1434,52 @@ impl Stage<'_> {
             } else {
                 let mut is_tag = branch_ops.is_tag;
                 let mut tip_commit = None;
+                let mut partial_sub_path = Vec::new();
                 if let Some((from_rev, ref from_path)) = branch_ops.create_from {
-                    if from_path != b""
-                        && matches!(
-                            self.options.classify_dir(from_path),
-                            DirClass::Branch(_, _, b"")
-                        )
-                    {
-                        tracing::debug!(
-                            "creating branch/tag \"{}\" from \"{}\"",
-                            branch_path.escape_ascii(),
-                            from_path.escape_ascii(),
-                        );
-                        let branch_path_commits = &self.branch_path_commits[from_path];
-                        let branch_path_commit = match branch_path_commits
-                            .binary_search_by_key(&from_rev, |&(c, _)| c)
+                    let mut parent_is_branch = None;
+                    if from_path != b"" {
+                        if let DirClass::Branch(parent_branch_path, _, sub_path) =
+                            self.options.classify_dir(from_path)
                         {
-                            Ok(i) => &branch_path_commits[i],
-                            Err(i) => &branch_path_commits[i - 1],
-                        };
-                        tip_commit = Some(branch_path_commit.1);
+                            let parent_branch_commits =
+                                &self.branch_path_commits[parent_branch_path];
+                            let parent_branch_commit = match parent_branch_commits
+                                .binary_search_by_key(&from_rev, |&(c, _)| c)
+                            {
+                                Ok(i) => &parent_branch_commits[i],
+                                Err(i) => &parent_branch_commits[i - 1],
+                            };
+                            let parent_branch_commit = parent_branch_commit.1;
+                            let parent_branch = &self.branch_data
+                                [self.branch_rev_data[parent_branch_commit].branch];
+
+                            let sub_path = concat_path(&parent_branch.partial_sub_path, sub_path);
+                            if sub_path.is_empty()
+                                || self.options.check_partial_branch(branch_path, is_tag)
+                            {
+                                parent_is_branch =
+                                    Some((parent_branch_commit, parent_branch_path, sub_path));
+                            }
+                        }
+                    }
+
+                    if let Some((parent_commit, parent_branch_path, sub_path)) = parent_is_branch {
+                        if sub_path.is_empty() {
+                            tracing::debug!(
+                                "creating branch/tag \"{}\" from \"{}\"",
+                                branch_path.escape_ascii(),
+                                from_path.escape_ascii(),
+                            );
+                        } else {
+                            tracing::debug!(
+                                "creating partial branch/tag \"{}\" from \"{}\" with sub-path \"{}\"",
+                                branch_path.escape_ascii(),
+                                parent_branch_path.escape_ascii(),
+                                sub_path.escape_ascii(),
+                            );
+                        }
+                        partial_sub_path = sub_path.to_vec();
+                        tip_commit = Some(parent_commit);
                     } else if is_tag {
                         tracing::warn!(
                             "creating tag \"{}\" from non-branch/tag \"{}\"",
@@ -1485,6 +1512,7 @@ impl Stage<'_> {
                 self.branch_data.push(BranchData {
                     svn_path: branch_path.to_vec(),
                     is_tag,
+                    partial_sub_path,
                     deleted: false,
                     tip_commit,
                     first_root_rev: root_commit,
@@ -1560,7 +1588,19 @@ impl Stage<'_> {
                     tracing::error!("branch root is not a tree");
                     return Err(ConvertError);
                 }
-                tree_oid
+                if branch_data.partial_sub_path.is_empty() {
+                    tree_oid
+                } else {
+                    let parent_tree_oid = self.branch_rev_data[parent_commit.unwrap()].tree_oid;
+                    self.tree_builder.reset(parent_tree_oid);
+                    self.tree_builder.mod_oid(
+                        &branch_data.partial_sub_path,
+                        mode,
+                        tree_oid,
+                        self.git_import,
+                    )?;
+                    self.tree_builder.materialize(self.git_import)?
+                }
             } else {
                 self.git_import.empty_tree_oid()
             };
@@ -1597,11 +1637,10 @@ impl Stage<'_> {
         branch_rev: usize,
         branch_tip_commit: usize,
     ) -> Result<(BTreeSet<usize>, BTreeSet<usize>), ConvertError> {
-        let meta = self.get_dir_meta(
-            self.root_rev_data.last().unwrap().meta_tree_oid,
-            &self.branch_data[branch].svn_path,
-        )?;
-        let svn_mergeinfo = meta::parse_mergeinfo(&meta.mergeinfo, &meta.svnmerge_integrated);
+        if !self.branch_data[branch].partial_sub_path.is_empty() {
+            // TODO: merges into partial branches
+            return Ok((BTreeSet::new(), BTreeSet::new()));
+        }
 
         let mut commit_history = Vec::new();
         let mut history_commit = Some(branch_tip_commit);
@@ -1621,6 +1660,12 @@ impl Stage<'_> {
             prev_svn_merges.extend(&self.branch_rev_data[history_commit].added_svn_merges);
         }
 
+        let meta = self.get_dir_meta(
+            self.root_rev_data.last().unwrap().meta_tree_oid,
+            &self.branch_data[branch].svn_path,
+        )?;
+        let svn_mergeinfo = meta::parse_mergeinfo(&meta.mergeinfo, &meta.svnmerge_integrated);
+
         let mut current_svn_merges = BTreeSet::new();
         for (merged_svn_path, merged_svn_revs) in svn_mergeinfo.iter() {
             let Some(branch_list) = self.path_to_branch.get(merged_svn_path).map(Vec::as_slice)
@@ -1632,6 +1677,11 @@ impl Stage<'_> {
             for &merged_branch in branch_list.iter() {
                 if merged_branch == branch {
                     // skip merges from itself
+                    continue;
+                }
+
+                if !self.branch_data[merged_branch].partial_sub_path.is_empty() {
+                    // TODO: merges from partial branches
                     continue;
                 }
 
@@ -1768,7 +1818,6 @@ impl Stage<'_> {
 }
 
 pub(crate) fn concat_path(a: &[u8], b: &[u8]) -> Vec<u8> {
-    assert!(!b.is_empty());
     assert!(!a.ends_with(b"/"));
     assert!(!a.starts_with(b"/"));
     assert!(!b.ends_with(b"/"));
@@ -1776,6 +1825,8 @@ pub(crate) fn concat_path(a: &[u8], b: &[u8]) -> Vec<u8> {
 
     if a.is_empty() {
         b.to_vec()
+    } else if b.is_empty() {
+        a.to_vec()
     } else {
         let mut r = Vec::with_capacity(a.len() + 1 + b.len());
         r.extend(a);

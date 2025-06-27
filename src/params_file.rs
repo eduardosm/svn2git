@@ -10,12 +10,16 @@ pub(crate) struct ConvParams {
     pub(crate) rename_branches: HashMap<String, String>,
     #[serde(rename = "keep-deleted-branches", default = "true_")]
     pub(crate) keep_deleted_branches: bool,
+    #[serde(rename = "partial-branches", default)]
+    pub(crate) partial_branches: Vec<String>,
     #[serde(default)]
     pub(crate) tags: Vec<String>,
     #[serde(rename = "rename-tags", default)]
     pub(crate) rename_tags: HashMap<String, String>,
     #[serde(rename = "keep-deleted-tags", default = "true_")]
     pub(crate) keep_deleted_tags: bool,
+    #[serde(rename = "partial-tags", default)]
+    pub(crate) partial_tags: Vec<String>,
     #[serde(default = "default_head")]
     pub(crate) head: String,
     #[serde(rename = "unbranched-name")]

@@ -159,6 +159,19 @@ fn main_inner() -> Result<(), RunError> {
             })?;
     }
 
+    for name in params.partial_branches.iter() {
+        options.add_partial_branch(name.as_bytes()).map_err(|_| {
+            tracing::error!("invalid partial branch name: {name:?}");
+            RunError::Generic
+        })?;
+    }
+    for name in params.partial_tags.iter() {
+        options.add_partial_tag(name.as_bytes()).map_err(|_| {
+            tracing::error!("invalid partial tag name: {name:?}");
+            RunError::Generic
+        })?;
+    }
+
     for ignored_merge in params.ignore_merges.iter() {
         options.add_ignored_merge_at(ignored_merge.path.as_bytes(), ignored_merge.rev);
     }

@@ -56,6 +56,38 @@
   keep-deleted-tags = false
   ```
 
+* `partial-branches` and `partial-tags` (default: empty array)
+
+  Arrays that specify which branches or tags are allowed to be created as
+  partial branches/tags. Partial branches are created from subdirectories
+  (e.g., `<BRANCH_DIR>/subpath` instead of `<BRANCH_DIR>`). The converted Git
+  branches will contain the complete branch tree structure.
+
+  This is useful when SVN branches are created by copying only a subdirectory
+  of another branch instead of the entire branch.
+
+  <u>Example</u>
+
+  ```toml
+  branches = [
+    "branches/*",
+    "branches/more/*"
+  ]
+  partial-branches = [
+    # Allow branch "branches/some_branch" to be a partial branch
+    "branches/some_branch",
+    # Allow each branch in "branches/more" to be a partial branch
+    "branches/more/*",
+  ]
+
+  partial-tags = [
+    # Allow each tag in "tags" to be a partial tag
+    "tags/*",
+  ]
+  ```
+
+  **Note:** Merges from/to partial branches are not yet supported.
+
 * `head` (default: `trunk`)
 
   Specifies which branch will be used as Git HEAD. You have to specify the
