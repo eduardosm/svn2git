@@ -119,8 +119,7 @@ pub(crate) fn run_test(test_path: &Path) -> Result<(), String> {
 
             if actual_git_refs != *expected_git_refs {
                 return Err(format!(
-                    "unexpected git refs:\nactual: {:?}\nexpected: {:?}",
-                    actual_git_refs, expected_git_refs,
+                    "unexpected git refs:\nactual: {actual_git_refs:?}\nexpected: {expected_git_refs:?}",
                 ));
             }
         }
