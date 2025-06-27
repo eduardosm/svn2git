@@ -1,0 +1,103 @@
+svn-revs:
+  - props:
+      svn:log: init directories
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+  - props:
+      svn:log: init trunk
+    nodes:
+      - path: trunk/x
+        kind: dir
+        action: add
+      - path: trunk/x/sub_x
+        kind: dir
+        action: add
+      - path: trunk/x/sub_x/A
+        kind: file
+        action: add
+        text: "file A\n"
+      - path: trunk/y
+        kind: dir
+        action: add
+      - path: trunk/y/B
+        kind: file
+        action: add
+        text: "file B\n"
+  - props:
+      svn:log: copy trunk to branches
+    nodes:
+      - path: branches
+        kind: dir
+        action: add
+        copy-from-path: trunk
+
+conv-params: |
+  branches = [
+    "trunk",
+    "branches/*",
+  ]
+  rename-branches."trunk" = "master"
+  rename-branches."branches/*" = "*"
+
+  partial-branches = [
+    "branches/*",
+  ]
+
+logs: |
+  D svn2git::convert::stage1: importing SVN revision 3
+  W svn2git::convert::stage1: copying branch "trunk" to non-branch "branches"
+  D svn2git::convert::stage1: committed on unbranched branch
+  D svn2git::convert::stage1: creating partial branch/tag "branches/x" from "trunk" with sub-path "x"
+  D svn2git::convert::stage1: creating partial branch/tag "branches/y" from "trunk" with sub-path "y"
+
+git-revs:
+  - rev: master~1
+    parents: []
+    tree: {}
+  - rev: master~0
+    parents: [master~1]
+    tree:
+      x:
+        type: dir
+      x/sub_x:
+        type: dir
+      x/sub_x/A:
+        type: normal
+        data: "file A\n"
+      y:
+        type: dir
+      y/B:
+        type: normal
+        data: "file B\n"
+  - rev: x~0
+    parents: [master~0]
+    tree:
+      x:
+        type: dir
+      x/sub_x:
+        type: dir
+      x/sub_x/A:
+        type: normal
+        data: "file A\n"
+      y:
+        type: dir
+      y/B:
+        type: normal
+        data: "file B\n"
+  - rev: y~0
+    parents: [master~0]
+    tree:
+      x:
+        type: dir
+      x/sub_x:
+        type: dir
+      x/sub_x/A:
+        type: normal
+        data: "file A\n"
+      y:
+        type: dir
+      y/B:
+        type: normal
+        data: "file B\n"

@@ -21,8 +21,10 @@ pub(crate) struct Options {
     root_dir_spec: ContainerDirSpecNode,
     pub(super) rename_branches: BranchRenamer,
     pub(super) keep_deleted_branches: bool,
+    pub(super) partial_branches: PartialBranchSet,
     pub(super) rename_tags: BranchRenamer,
     pub(super) keep_deleted_tags: bool,
+    pub(super) partial_tags: PartialBranchSet,
     pub(super) head_path: Vec<u8>,
     pub(super) unbranched_name: Option<String>,
     pub(super) enable_merges: bool,
@@ -54,6 +56,8 @@ pub(super) enum DirClass<'a> {
 
 pub(crate) struct BranchRenameAddError;
 
+pub(crate) struct PartialBranchAddError;
+
 impl Options {
     pub(crate) fn new(init: InitOptions) -> Self {
         Self {
@@ -63,8 +67,10 @@ impl Options {
             },
             rename_branches: BranchRenamer::new(),
             keep_deleted_branches: init.keep_deleted_branches,
+            partial_branches: PartialBranchSet::new(),
             rename_tags: BranchRenamer::new(),
             keep_deleted_tags: init.keep_deleted_tags,
+            partial_tags: PartialBranchSet::new(),
             head_path: init.head_path,
             unbranched_name: init.unbranched_name,
             enable_merges: init.enable_merges,
@@ -159,6 +165,14 @@ impl Options {
         self.rename_tags.add(from, to)
     }
 
+    pub(crate) fn add_partial_branch(&mut self, name: &[u8]) -> Result<(), PartialBranchAddError> {
+        self.partial_branches.add(name)
+    }
+
+    pub(crate) fn add_partial_tag(&mut self, name: &[u8]) -> Result<(), PartialBranchAddError> {
+        self.partial_tags.add(name)
+    }
+
     pub(super) fn classify_dir<'a>(&self, path: &'a [u8]) -> DirClass<'a> {
         let mut current_path_len = 0;
         let mut current_dir_node = &self.root_dir_spec;
@@ -206,6 +220,14 @@ impl Options {
             DirClass::BranchParent
         } else {
             DirClass::Unbranched
+        }
+    }
+
+    pub(crate) fn check_partial_branch(&self, branch_path: &[u8], is_tag: bool) -> bool {
+        if is_tag {
+            self.partial_tags.check(branch_path)
+        } else {
+            self.partial_branches.check(branch_path)
         }
     }
 
@@ -265,6 +287,50 @@ impl BranchRenamer {
 
             Cow::Borrowed(name)
         }
+    }
+}
+
+pub(super) struct PartialBranchSet {
+    exact: HashSet<Vec<u8>>,
+    prefix: HashSet<Vec<u8>>,
+}
+
+impl PartialBranchSet {
+    fn new() -> Self {
+        Self {
+            exact: HashSet::new(),
+            prefix: HashSet::new(),
+        }
+    }
+
+    fn add(&mut self, name: &[u8]) -> Result<(), PartialBranchAddError> {
+        if let Some(prefix) = name.strip_suffix(b"*") {
+            if prefix.contains(&b'*') {
+                return Err(PartialBranchAddError);
+            }
+            self.prefix.insert(prefix.to_vec());
+            Ok(())
+        } else {
+            if name.contains(&b'*') {
+                return Err(PartialBranchAddError);
+            }
+            self.exact.insert(name.to_vec());
+            Ok(())
+        }
+    }
+
+    fn check(&self, branch_path: &[u8]) -> bool {
+        if self.exact.contains(branch_path) {
+            return true;
+        }
+
+        for prefix in self.prefix.iter() {
+            if branch_path.starts_with(prefix) {
+                return true;
+            }
+        }
+
+        false
     }
 }
 
