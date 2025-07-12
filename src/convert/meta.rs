@@ -50,20 +50,20 @@ impl DirMetadata {
 
     pub(super) fn serialize(&self) -> Vec<u8> {
         let mut out = Vec::new();
-        Self::serialize_bytes(&self.ignores, &mut out);
-        Self::serialize_bytes(&self.global_ignores, &mut out);
-        Self::serialize_bytes(&self.mergeinfo, &mut out);
-        Self::serialize_bytes(&self.svnmerge_integrated, &mut out);
+        Self::serialize_byte_slice(&self.ignores, &mut out);
+        Self::serialize_byte_slice(&self.global_ignores, &mut out);
+        Self::serialize_byte_slice(&self.mergeinfo, &mut out);
+        Self::serialize_byte_slice(&self.svnmerge_integrated, &mut out);
         out
     }
 
     pub(super) fn deserialize(raw: &[u8]) -> Option<Self> {
         let mut src = raw;
 
-        let ignores = Self::deserialize_bytes(&mut src)?;
-        let global_ignores = Self::deserialize_bytes(&mut src)?;
-        let mergeinfo = Self::deserialize_bytes(&mut src)?;
-        let mergeinfo_integrated = Self::deserialize_bytes(&mut src)?;
+        let ignores = Self::deserialize_byte_slice(&mut src)?;
+        let global_ignores = Self::deserialize_byte_slice(&mut src)?;
+        let mergeinfo = Self::deserialize_byte_slice(&mut src)?;
+        let mergeinfo_integrated = Self::deserialize_byte_slice(&mut src)?;
 
         if !src.is_empty() {
             return None;
@@ -77,15 +77,19 @@ impl DirMetadata {
         })
     }
 
-    fn serialize_bytes(bytes: &[u8], dst: &mut Vec<u8>) {
+    fn serialize_byte_slice(bytes: &[u8], dst: &mut Vec<u8>) {
         dst.extend(bytes.len().to_ne_bytes());
         dst.extend(bytes);
     }
 
-    fn deserialize_bytes(src: &mut &[u8]) -> Option<Vec<u8>> {
-        let raw_len;
-        (raw_len, *src) = src.split_first_chunk()?;
-        let len = usize::from_ne_bytes(*raw_len);
+    fn deserialize_byte_array<const N: usize>(src: &mut &[u8]) -> Option<[u8; N]> {
+        let array;
+        (array, *src) = src.split_first_chunk()?;
+        Some(*array)
+    }
+
+    fn deserialize_byte_slice(src: &mut &[u8]) -> Option<Vec<u8>> {
+        let len = usize::from_ne_bytes(Self::deserialize_byte_array(src)?);
 
         if src.len() < len {
             return None;
