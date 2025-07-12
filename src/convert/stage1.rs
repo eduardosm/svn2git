@@ -737,7 +737,7 @@ impl Stage<'_> {
 
                         let props = props.take();
 
-                        let mut raw_meta = None;
+                        let mut meta = None;
                         if let Some(props) = props {
                             if node_action == svn::dump::NodeAction::Change {
                                 let meta_path = concat_path(&node_path, b".svn");
@@ -788,10 +788,10 @@ impl Stage<'_> {
                                 );
                             }
 
-                            let meta = meta::DirMetadata::from_props(&props.properties, prev_meta);
-                            raw_meta = Some(meta.serialize());
+                            meta =
+                                Some(meta::DirMetadata::from_props(&props.properties, prev_meta));
                         } else if is_empty_new {
-                            raw_meta = Some(meta::DirMetadata::default().serialize());
+                            meta = Some(meta::DirMetadata::default());
                         } else {
                             // preserve metadata from existing or copied directory
                             // (keep `raw_meta` as `None`)
@@ -800,7 +800,7 @@ impl Stage<'_> {
                         if node_action == svn::dump::NodeAction::Change {
                             node_ops.push(RootNodeOp {
                                 path: node_path.clone(),
-                                action: RootNodeAction::ModDir(raw_meta.is_some()),
+                                action: RootNodeAction::ModDir(meta.is_some()),
                             });
                         } else if let Some((copy_from_rev, copy_from_path)) = copy_from.take() {
                             let (copy_from_mode, copy_from_oid) = self
@@ -836,7 +836,7 @@ impl Stage<'_> {
                             node_ops.push(RootNodeOp {
                                 path: node_path.clone(),
                                 action: RootNodeAction::CopyDir(
-                                    raw_meta.is_some(),
+                                    meta.is_some(),
                                     copy_from_rev,
                                     copy_from_path,
                                 ),
@@ -848,7 +848,8 @@ impl Stage<'_> {
                             });
                         }
 
-                        if let Some(raw_meta) = raw_meta {
+                        if let Some(meta) = meta {
+                            let raw_meta = meta.serialize();
                             let meta_path = concat_path(&node_path, b".svn");
                             self.tree_builder.mod_inline(
                                 &meta_path,
