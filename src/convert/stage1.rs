@@ -86,15 +86,19 @@ enum RootNodeAction {
     ModDir(bool),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 struct BranchOps {
     is_tag: bool,
     delete: bool,
-    create: bool,
-    create_from: Option<(usize, Vec<u8>)>,
+    create: Option<BranchCreateOp>,
     modify: bool,
     root_meta: bool,
     required_in_mergeinfo: bool,
+}
+
+#[derive(Debug)]
+struct BranchCreateOp {
+    from: Option<(usize, Vec<u8>)>,
 }
 
 impl BranchOps {
@@ -102,8 +106,7 @@ impl BranchOps {
         Self {
             is_tag,
             delete: false,
-            create: false,
-            create_from: None,
+            create: None,
             modify: false,
             root_meta: false,
             required_in_mergeinfo: false,
@@ -1132,7 +1135,7 @@ impl Stage<'_> {
                             .entry(branch_path.to_vec())
                             .or_insert_with(|| BranchOps::new(is_tag));
                         if subdir == b"" {
-                            branch_ops.create = true;
+                            branch_ops.create = Some(BranchCreateOp { from: None });
                             branch_ops.root_meta = true;
                         } else {
                             branch_ops.modify = true;
@@ -1177,8 +1180,9 @@ impl Stage<'_> {
                                 .entry(branch_path.to_vec())
                                 .or_insert_with(|| BranchOps::new(is_tag));
                             if subdir == b"" {
-                                branch_ops.create = true;
-                                branch_ops.create_from = Some((copy_from_rev, copy_from_path));
+                                branch_ops.create = Some(BranchCreateOp {
+                                    from: Some((copy_from_rev, copy_from_path)),
+                                });
                                 branch_ops.root_meta = true;
                                 branch_ops.required_in_mergeinfo |= has_meta;
                             } else {
@@ -1412,7 +1416,7 @@ impl Stage<'_> {
         let root_commit = self.root_rev_data.len() - 1;
 
         if branch_ops.delete {
-            if branch_ops.create {
+            if branch_ops.create.is_some() {
                 tracing::warn!(
                     "branch/tag \"{}\" is deleted and re-created in the same commit",
                     branch_path.escape_ascii(),
@@ -1425,7 +1429,7 @@ impl Stage<'_> {
         }
 
         let mut branch = None;
-        if branch_ops.create {
+        if let Some(ref create_op) = branch_ops.create {
             if self.live_branches.contains_key(branch_path) {
                 tracing::error!(
                     "branch/tag \"{}\" already exists",
@@ -1436,7 +1440,7 @@ impl Stage<'_> {
                 let mut is_tag = branch_ops.is_tag;
                 let mut tip_commit = None;
                 let mut partial_sub_path = Vec::new();
-                if let Some((from_rev, ref from_path)) = branch_ops.create_from {
+                if let Some((from_rev, ref from_path)) = create_op.from {
                     let mut parent_is_branch = None;
                     if from_path != b"" {
                         if let DirClass::Branch(parent_branch_path, _, sub_path) =
@@ -1561,7 +1565,7 @@ impl Stage<'_> {
 
             let branch_data = &mut self.branch_data[branch];
             if branch_data.is_tag {
-                if !branch_ops.create {
+                if branch_ops.create.is_none() {
                     tracing::warn!(
                         "tag \"{}\" has more than one commit",
                         branch_path.escape_ascii(),
