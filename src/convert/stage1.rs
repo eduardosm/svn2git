@@ -88,7 +88,6 @@ enum RootNodeAction {
 
 #[derive(Debug)]
 struct BranchOps {
-    is_tag: bool,
     delete: bool,
     create: Option<BranchCreateOp>,
     modify: bool,
@@ -98,13 +97,13 @@ struct BranchOps {
 
 #[derive(Debug)]
 struct BranchCreateOp {
+    is_tag: bool,
     from: Option<(usize, Vec<u8>)>,
 }
 
-impl BranchOps {
-    fn new(is_tag: bool) -> Self {
+impl Default for BranchOps {
+    fn default() -> Self {
         Self {
-            is_tag,
             delete: false,
             create: None,
             modify: false,
@@ -1027,10 +1026,8 @@ impl Stage<'_> {
                                     action: UnbranchedNodeAction::DelFile,
                                 });
                         }
-                        DirClass::Branch(branch_path, is_tag, _) => {
-                            let branch_ops = branches_ops
-                                .entry(branch_path.to_vec())
-                                .or_insert_with(|| BranchOps::new(is_tag));
+                        DirClass::Branch(branch_path, _, _) => {
+                            let branch_ops = branches_ops.entry(branch_path.to_vec()).or_default();
                             branch_ops.modify = true;
                             branch_ops.required_in_mergeinfo = true;
                         }
@@ -1047,10 +1044,8 @@ impl Stage<'_> {
                                     action: UnbranchedNodeAction::ModFile,
                                 });
                         }
-                        DirClass::Branch(branch_path, is_tag, _) => {
-                            let branch_ops = branches_ops
-                                .entry(branch_path.to_vec())
-                                .or_insert_with(|| BranchOps::new(is_tag));
+                        DirClass::Branch(branch_path, _, _) => {
+                            let branch_ops = branches_ops.entry(branch_path.to_vec()).or_default();
                             branch_ops.modify = true;
                             if !branch_ops.required_in_mergeinfo
                                 && self.mod_file_required_in_mergeinfo(&node_op.path)
@@ -1070,10 +1065,8 @@ impl Stage<'_> {
                                     action: UnbranchedNodeAction::DelDir,
                                 });
                         }
-                        DirClass::Branch(branch_path, is_tag, subdir) => {
-                            let branch_ops = branches_ops
-                                .entry(branch_path.to_vec())
-                                .or_insert_with(|| BranchOps::new(is_tag));
+                        DirClass::Branch(branch_path, _, subdir) => {
+                            let branch_ops = branches_ops.entry(branch_path.to_vec()).or_default();
                             if subdir == b"" {
                                 branch_ops.delete = true;
                             } else {
@@ -1131,11 +1124,9 @@ impl Stage<'_> {
                             });
                     }
                     DirClass::Branch(branch_path, is_tag, subdir) => {
-                        let branch_ops = branches_ops
-                            .entry(branch_path.to_vec())
-                            .or_insert_with(|| BranchOps::new(is_tag));
+                        let branch_ops = branches_ops.entry(branch_path.to_vec()).or_default();
                         if subdir == b"" {
-                            branch_ops.create = Some(BranchCreateOp { from: None });
+                            branch_ops.create = Some(BranchCreateOp { is_tag, from: None });
                             branch_ops.root_meta = true;
                         } else {
                             branch_ops.modify = true;
@@ -1176,11 +1167,10 @@ impl Stage<'_> {
                                 });
                         }
                         DirClass::Branch(branch_path, is_tag, subdir) => {
-                            let branch_ops = branches_ops
-                                .entry(branch_path.to_vec())
-                                .or_insert_with(|| BranchOps::new(is_tag));
+                            let branch_ops = branches_ops.entry(branch_path.to_vec()).or_default();
                             if subdir == b"" {
                                 branch_ops.create = Some(BranchCreateOp {
+                                    is_tag,
                                     from: Some((copy_from_rev, copy_from_path)),
                                 });
                                 branch_ops.root_meta = true;
@@ -1267,10 +1257,8 @@ impl Stage<'_> {
                                     action: UnbranchedNodeAction::ModDir(has_meta),
                                 });
                         }
-                        DirClass::Branch(branch_path, is_tag, subdir) => {
-                            let branch_ops = branches_ops
-                                .entry(branch_path.to_vec())
-                                .or_insert_with(|| BranchOps::new(is_tag));
+                        DirClass::Branch(branch_path, _, subdir) => {
+                            let branch_ops = branches_ops.entry(branch_path.to_vec()).or_default();
                             if subdir == b"" {
                                 branch_ops.root_meta |= has_meta;
                             } else {
@@ -1437,7 +1425,7 @@ impl Stage<'_> {
                 );
                 return Err(ConvertError);
             } else {
-                let mut is_tag = branch_ops.is_tag;
+                let mut is_tag = create_op.is_tag;
                 let mut tip_commit = None;
                 let mut partial_sub_path = Vec::new();
                 if let Some((from_rev, ref from_path)) = create_op.from {

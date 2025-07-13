@@ -5,7 +5,11 @@
     unreachable_pub,
     unused_qualifications
 )]
-#![allow(clippy::enum_variant_names, clippy::type_complexity)]
+#![allow(
+    clippy::derivable_impls,
+    clippy::enum_variant_names,
+    clippy::type_complexity
+)]
 
 use std::process::ExitCode;
 
