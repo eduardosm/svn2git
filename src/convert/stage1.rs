@@ -374,7 +374,7 @@ impl Stage<'_> {
             files_tree_oid: root_files_tree_oid,
         });
 
-        if let Some(unbranched_ops) = unbranched_ops {
+        if !unbranched_ops.is_empty() {
             self.make_unbranched_tree(svn_rev, &unbranched_ops)?;
         }
 
@@ -1007,11 +1007,11 @@ impl Stage<'_> {
     fn split_branches(
         &mut self,
         node_ops: &[RootNodeOp],
-    ) -> Result<(Option<Vec<UnbranchedNodeOp>>, BTreeMap<Vec<u8>, BranchOps>), ConvertError> {
+    ) -> Result<(Vec<UnbranchedNodeOp>, BTreeMap<Vec<u8>, BranchOps>), ConvertError> {
         let mut pending: VecDeque<_> = node_ops.iter().cloned().collect();
 
         let mut branches_ops = BTreeMap::<Vec<u8>, BranchOps>::new();
-        let mut unbranched_ops = None::<Vec<UnbranchedNodeOp>>;
+        let mut unbranched_ops = Vec::new();
 
         while let Some(node_op) = pending.pop_front() {
             match node_op.action {
@@ -1019,12 +1019,10 @@ impl Stage<'_> {
                     let dir_path = get_path_base_dir(&node_op.path);
                     match self.options.classify_dir(dir_path) {
                         DirClass::Unbranched | DirClass::BranchParent => {
-                            unbranched_ops
-                                .get_or_insert_with(Vec::new)
-                                .push(UnbranchedNodeOp {
-                                    path: node_op.path,
-                                    action: UnbranchedNodeAction::DelFile,
-                                });
+                            unbranched_ops.push(UnbranchedNodeOp {
+                                path: node_op.path,
+                                action: UnbranchedNodeAction::DelFile,
+                            });
                         }
                         DirClass::Branch(branch_path, _, _) => {
                             let branch_ops = branches_ops.entry(branch_path.to_vec()).or_default();
@@ -1037,12 +1035,10 @@ impl Stage<'_> {
                     let dir_path = get_path_base_dir(&node_op.path);
                     match self.options.classify_dir(dir_path) {
                         DirClass::Unbranched | DirClass::BranchParent => {
-                            unbranched_ops
-                                .get_or_insert_with(Vec::new)
-                                .push(UnbranchedNodeOp {
-                                    path: node_op.path,
-                                    action: UnbranchedNodeAction::ModFile,
-                                });
+                            unbranched_ops.push(UnbranchedNodeOp {
+                                path: node_op.path,
+                                action: UnbranchedNodeAction::ModFile,
+                            });
                         }
                         DirClass::Branch(branch_path, _, _) => {
                             let branch_ops = branches_ops.entry(branch_path.to_vec()).or_default();
@@ -1058,12 +1054,10 @@ impl Stage<'_> {
                 RootNodeAction::DelDir(tree_oid) => {
                     match self.options.classify_dir(&node_op.path) {
                         DirClass::Unbranched => {
-                            unbranched_ops
-                                .get_or_insert_with(Vec::new)
-                                .push(UnbranchedNodeOp {
-                                    path: node_op.path,
-                                    action: UnbranchedNodeAction::DelDir,
-                                });
+                            unbranched_ops.push(UnbranchedNodeOp {
+                                path: node_op.path,
+                                action: UnbranchedNodeAction::DelDir,
+                            });
                         }
                         DirClass::Branch(branch_path, _, subdir) => {
                             let branch_ops = branches_ops.entry(branch_path.to_vec()).or_default();
@@ -1105,23 +1099,19 @@ impl Stage<'_> {
                                 });
                             }
 
-                            unbranched_ops
-                                .get_or_insert_with(Vec::new)
-                                .push(UnbranchedNodeOp {
-                                    path: node_op.path,
-                                    action: UnbranchedNodeAction::DelDir,
-                                });
+                            unbranched_ops.push(UnbranchedNodeOp {
+                                path: node_op.path,
+                                action: UnbranchedNodeAction::DelDir,
+                            });
                         }
                     }
                 }
                 RootNodeAction::AddDir => match self.options.classify_dir(&node_op.path) {
                     DirClass::Unbranched | DirClass::BranchParent => {
-                        unbranched_ops
-                            .get_or_insert_with(Vec::new)
-                            .push(UnbranchedNodeOp {
-                                path: node_op.path,
-                                action: UnbranchedNodeAction::AddDir,
-                            });
+                        unbranched_ops.push(UnbranchedNodeOp {
+                            path: node_op.path,
+                            action: UnbranchedNodeAction::AddDir,
+                        });
                     }
                     DirClass::Branch(branch_path, is_tag, subdir) => {
                         let branch_ops = branches_ops.entry(branch_path.to_vec()).or_default();
@@ -1155,16 +1145,14 @@ impl Stage<'_> {
                                 _ => {}
                             }
 
-                            unbranched_ops
-                                .get_or_insert_with(Vec::new)
-                                .push(UnbranchedNodeOp {
-                                    path: node_op.path,
-                                    action: UnbranchedNodeAction::CopyDir(
-                                        has_meta,
-                                        copy_from_rev,
-                                        copy_from_path,
-                                    ),
-                                });
+                            unbranched_ops.push(UnbranchedNodeOp {
+                                path: node_op.path,
+                                action: UnbranchedNodeAction::CopyDir(
+                                    has_meta,
+                                    copy_from_rev,
+                                    copy_from_path,
+                                ),
+                            });
                         }
                         DirClass::Branch(branch_path, is_tag, subdir) => {
                             let branch_ops = branches_ops.entry(branch_path.to_vec()).or_default();
@@ -1238,24 +1226,20 @@ impl Stage<'_> {
                                 }
                             }
 
-                            unbranched_ops
-                                .get_or_insert_with(Vec::new)
-                                .push(UnbranchedNodeOp {
-                                    path: node_op.path,
-                                    action: UnbranchedNodeAction::AddDir,
-                                });
+                            unbranched_ops.push(UnbranchedNodeOp {
+                                path: node_op.path,
+                                action: UnbranchedNodeAction::AddDir,
+                            });
                         }
                     }
                 }
                 RootNodeAction::ModDir(has_meta) => {
                     match self.options.classify_dir(&node_op.path) {
                         DirClass::Unbranched => {
-                            unbranched_ops
-                                .get_or_insert_with(Vec::new)
-                                .push(UnbranchedNodeOp {
-                                    path: node_op.path,
-                                    action: UnbranchedNodeAction::ModDir(has_meta),
-                                });
+                            unbranched_ops.push(UnbranchedNodeOp {
+                                path: node_op.path,
+                                action: UnbranchedNodeAction::ModDir(has_meta),
+                            });
                         }
                         DirClass::Branch(branch_path, _, subdir) => {
                             let branch_ops = branches_ops.entry(branch_path.to_vec()).or_default();
@@ -1268,12 +1252,10 @@ impl Stage<'_> {
                             branch_ops.required_in_mergeinfo |= has_meta;
                         }
                         DirClass::BranchParent => {
-                            unbranched_ops
-                                .get_or_insert_with(Vec::new)
-                                .push(UnbranchedNodeOp {
-                                    path: node_op.path,
-                                    action: UnbranchedNodeAction::ModDir(has_meta),
-                                });
+                            unbranched_ops.push(UnbranchedNodeOp {
+                                path: node_op.path,
+                                action: UnbranchedNodeAction::ModDir(has_meta),
+                            });
                         }
                     }
                 }
