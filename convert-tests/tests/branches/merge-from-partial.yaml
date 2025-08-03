@@ -1,0 +1,131 @@
+svn-revs:
+  - props:
+      svn:log: init directories
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+      - path: branches
+        kind: dir
+        action: add
+  - props:
+      svn:log: init trunk
+    nodes:
+      - path: trunk/x
+        kind: dir
+        action: add
+      - path: trunk/x/A
+        kind: file
+        action: add
+        text: "file A\n"
+      - path: trunk/y
+        kind: dir
+        action: add
+      - path: trunk/y/B
+        kind: file
+        action: add
+        text: "file B\n"
+  - props:
+      svn:log: copy trunk/x to branches/b1
+    nodes:
+      - path: branches/b1
+        kind: dir
+        action: add
+        copy-from-path: trunk/x
+  - no: 4
+    props:
+      svn:log: modify A
+    nodes:
+      - path: branches/b1/A
+        kind: file
+        action: change
+        text: "modified A\n"
+  - props:
+      svn:log: merge b1:4 into trunk
+    nodes:
+      - path: trunk/x
+        kind: dir
+        action: change
+        props:
+          svn:mergeinfo: |
+            /branches/b1:4
+      - path: trunk/x/A
+        kind: file
+        action: change
+        text: "modified A\n"
+
+conv-params: |
+  branches = [
+    "trunk",
+    "branches/*",
+  ]
+  rename-branches."trunk" = "master"
+  rename-branches."branches/*" = "*"
+
+  partial-branches = [
+    "branches/*",
+  ]
+
+logs: |
+  D svn2git::convert::stage1: importing SVN revision 3
+  D svn2git::convert::stage1: creating partial branch/tag "branches/b1" from "trunk" with sub-path "x"
+  D svn2git::convert::stage2: emitting branch commits and tags for SVN revision 5
+  D svn2git::convert::stage2: candidate to be merged: "branches/b1"@4
+  D svn2git::convert::stage2: merging into "trunk"
+
+git-revs:
+  - rev: master~2
+    parents: []
+    tree: {}
+  - rev: master~1
+    parents: [master~2]
+    tree:
+      x:
+        type: dir
+      x/A:
+        type: normal
+        data: "file A\n"
+      y:
+        type: dir
+      y/B:
+        type: normal
+        data: "file B\n"
+  - rev: master~0
+    parents: [master~1, b1~0]
+    tree:
+      x:
+        type: dir
+      x/A:
+        type: normal
+        data: "modified A\n"
+      y:
+        type: dir
+      y/B:
+        type: normal
+        data: "file B\n"
+  - rev: b1~1
+    parents: [master~1]
+    tree:
+      x:
+        type: dir
+      x/A:
+        type: normal
+        data: "file A\n"
+      y:
+        type: dir
+      y/B:
+        type: normal
+        data: "file B\n"
+  - rev: b1~0
+    parents: [b1~1]
+    tree:
+      x:
+        type: dir
+      x/A:
+        type: normal
+        data: "modified A\n"
+      y:
+        type: dir
+      y/B:
+        type: normal
+        data: "file B\n"
