@@ -1,0 +1,124 @@
+svn-revs:
+  - props:
+      svn:log: init directories
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+      - path: branches
+        kind: dir
+        action: add
+  - props:
+      svn:log: init trunk
+    nodes:
+      - path: trunk/x
+        kind: dir
+        action: add
+      - path: trunk/x/A
+        kind: file
+        action: add
+        text: "file A\n"
+  - props:
+      svn:log: copy trunk to branches/b1
+    nodes:
+      - path: branches/b1
+        kind: dir
+        action: add
+        copy-from-path: trunk
+  - props:
+      svn:log: add y to trunk
+    nodes:
+      - path: trunk/y
+        kind: dir
+        action: add
+      - path: trunk/y/B
+        kind: file
+        action: add
+        text: "file B\n"
+  - props:
+      svn:log: copy trunk/y to branches/b2
+    nodes:
+      - path: branches/b2
+        kind: dir
+        action: add
+        copy-from-path: trunk/y
+  # Test modifying a branch that does not contain the "y" directory
+  - props:
+      svn:log: add z/C to b1
+    nodes:
+      - path: branches/b1/z
+        kind: dir
+        action: add
+      - path: branches/b1/z/C
+        kind: file
+        action: add
+        text: "file C\n"
+
+conv-params: |
+  branches = [
+    "trunk",
+    "branches/*",
+  ]
+  rename-branches."trunk" = "master"
+  rename-branches."branches/*" = "*"
+
+  partial-branches = [
+    "branches/*",
+  ]
+
+logs: |
+  D svn2git::convert::stage1: importing SVN revision 3
+  D svn2git::convert::stage1: creating branch/tag "branches/b1" from "trunk"
+  D svn2git::convert::stage1: importing SVN revision 4
+  D svn2git::convert::stage1: modification on branch/tag "trunk"
+  D svn2git::convert::stage1: importing SVN revision 5
+  D svn2git::convert::stage1: creating partial branch/tag "branches/b2" from "trunk" with sub-path "y"
+  D svn2git::convert::stage1: importing SVN revision 6
+  D svn2git::convert::stage1: modification on branch/tag "branches/b1"
+
+git-revs:
+  - rev: master~2
+    parents: []
+    tree: {}
+  - rev: master~1
+    parents: [master~2]
+    tree:
+      x:
+        type: dir
+      x/A:
+        type: normal
+        data: "file A\n"
+  - rev: master~0
+    parents: [master~1]
+    tree:
+      x:
+        type: dir
+      x/A:
+        type: normal
+        data: "file A\n"
+      y:
+        type: dir
+      y/B:
+        type: normal
+        data: "file B\n"
+  - rev: b1~1
+    parents: [master~1]
+    tree:
+      x:
+        type: dir
+      x/A:
+        type: normal
+        data: "file A\n"
+  - rev: b1~0
+    parents: [b1~1]
+    tree:
+      x:
+        type: dir
+      x/A:
+        type: normal
+        data: "file A\n"
+      z:
+        type: dir
+      z/C:
+        type: normal
+        data: "file C\n"

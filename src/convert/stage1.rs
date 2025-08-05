@@ -1699,10 +1699,13 @@ impl Stage<'_> {
                 }
             }
 
-            let meta = self.get_dir_meta(
+            let Some(meta) = self.try_get_dir_meta(
                 self.root_rev_data.last().unwrap().meta_tree_oid,
                 &merge_dst_path,
-            )?;
+            )?
+            else {
+                continue;
+            };
             let svn_mergeinfo = meta::parse_mergeinfo(&meta.mergeinfo, &meta.svnmerge_integrated);
 
             for (merged_svn_path, merged_svn_revs) in svn_mergeinfo.iter() {
@@ -1844,27 +1847,50 @@ impl Stage<'_> {
         Ok((added_svn_merges, removed_svn_merges))
     }
 
+    fn try_get_dir_meta(
+        &self,
+        meta_tree_oid: gix_hash::ObjectId,
+        dir_path: &[u8],
+    ) -> Result<Option<meta::DirMetadata>, ConvertError> {
+        let Some((path_entry_type, path_entry_oid)) =
+            self.git_import.ls(meta_tree_oid, dir_path)?
+        else {
+            return Ok(None);
+        };
+
+        if !path_entry_type.is_tree() {
+            return Ok(None);
+        }
+
+        let (_, meta_blob_oid) = self
+            .git_import
+            .ls(path_entry_oid, b".svn")?
+            .ok_or_else(|| {
+                tracing::error!(
+                    "missing directory metadata for \"{}\"",
+                    dir_path.escape_ascii(),
+                );
+                ConvertError
+            })?;
+        let raw_meta = self.git_import.get_blob(meta_blob_oid)?;
+        meta::DirMetadata::deserialize(&raw_meta)
+            .ok_or_else(|| {
+                tracing::error!("failed to deserialize directory metadata");
+                ConvertError
+            })
+            .map(Some)
+    }
+
     fn get_dir_meta(
         &self,
         meta_tree_oid: gix_hash::ObjectId,
         dir_path: &[u8],
     ) -> Result<meta::DirMetadata, ConvertError> {
-        let meta_path = concat_path(dir_path, b".svn");
-        let (_, meta_blob_oid) =
-            self.git_import
-                .ls(meta_tree_oid, &meta_path)?
-                .ok_or_else(|| {
-                    tracing::error!(
-                        "missing directory metadata for \"{}\"",
-                        dir_path.escape_ascii(),
-                    );
-                    ConvertError
-                })?;
-        let raw_meta = self.git_import.get_blob(meta_blob_oid)?;
-        meta::DirMetadata::deserialize(&raw_meta).ok_or_else(|| {
-            tracing::error!("failed to deserialize directory metadata");
-            ConvertError
-        })
+        self.try_get_dir_meta(meta_tree_oid, dir_path)?
+            .ok_or_else(|| {
+                tracing::error!("missing directory \"{}\"", dir_path.escape_ascii());
+                ConvertError
+            })
     }
 }
 
