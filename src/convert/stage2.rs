@@ -1,7 +1,7 @@
 use std::collections::{BTreeSet, HashMap, VecDeque};
 
 use super::options::Options;
-use super::{git_wrap, stage1, ConvertError, GitMetaMaker};
+use super::{ConvertError, GitMetaMaker, git_wrap, stage1};
 use crate::git;
 use crate::term_out::ProgressPrint;
 

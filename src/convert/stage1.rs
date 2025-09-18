@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 
 use super::options::{DirClass, Options};
-use super::{git_wrap, meta, ConvertError};
+use super::{ConvertError, git_wrap, meta};
 use crate::svn;
 use crate::term_out::ProgressPrint;
 

@@ -160,7 +160,7 @@ fn skip_spaces(slice: &mut &[u8]) {
 
 #[cfg(test)]
 mod test {
-    use super::{parse_line, UserMapEntry};
+    use super::{UserMapEntry, parse_line};
 
     #[test]
     fn test_parse_line() {

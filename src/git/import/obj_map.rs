@@ -47,7 +47,7 @@ impl<T> ObjMap<T> {
             .table
             .find_entry(get_u64_hash(&key), |(k, _)| *k == key)
         {
-            Ok(entry) => Some(entry.remove().0 .1),
+            Ok(entry) => Some(entry.remove().0.1),
             Err(_) => None,
         }
     }
