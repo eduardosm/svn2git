@@ -4,8 +4,8 @@ use std::sync::{Condvar, Mutex};
 use gix_hash::ObjectId;
 
 use super::super::delta;
-use super::obj_map::ObjMap;
 use super::ImportError;
+use super::obj_map::ObjMap;
 
 pub(super) struct TempStorage {
     path: std::path::PathBuf,

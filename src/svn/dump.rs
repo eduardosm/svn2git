@@ -346,12 +346,12 @@ impl<'a> DumpReader<'a> {
                 (Some(_), None) => {
                     return Err(ReadError::MissingHeaderEntry {
                         key: copy_from_path_key.to_vec(),
-                    })
+                    });
                 }
                 (None, Some(_)) => {
                     return Err(ReadError::MissingHeaderEntry {
                         key: copy_from_rev_key.to_vec(),
-                    })
+                    });
                 }
             };
 

@@ -4,9 +4,9 @@ use std::sync::{Arc, Condvar, Mutex};
 use gix_hash::ObjectId;
 use gix_object::{Object, ObjectRef};
 
+use super::ImportError;
 use super::obj_map::ObjMap;
 use super::temp_storage::TempStorage;
-use super::ImportError;
 
 pub(super) struct TempStorageThread {
     data: Arc<Data>,
