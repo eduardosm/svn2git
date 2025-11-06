@@ -151,7 +151,7 @@ jobs:
       - name: Install Rust
         run: ./ci/install-rust.sh stable --profile minimal
       - name: Install mdbook
-        run: cargo install --locked --version 0.4.43 mdbook
+        run: cargo install --locked --version 0.4.52 mdbook
       - name: Build book
         run: ./ci/build-dist-book.sh
       - name: Upload artifact
