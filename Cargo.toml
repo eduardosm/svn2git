@@ -18,44 +18,44 @@ path = "convert-tests/main.rs"
 harness = false
 
 [dependencies]
-bzip2 = { version = "0.6.0", features = ["static"] }
+bzip2 = { version = "0.6.1", features = ["static"] }
 chrono = "0.4.42"
-clap = { version = "4.5.47", features = ["derive"] }
+clap = { version = "4.5.51", features = ["derive"] }
 crossterm = "0.29.0"
 cyclic-poly-23 = "0.4.0"
-flate2 = "1.1.2"
-gix-actor = "0.35.4"
-gix-date = "0.10.5"
-gix-features = "0.43.1"
-gix-hash = "0.19.0"
-gix-object = "0.50.2"
-gix-pack = "0.60.0"
+flate2 = "1.1.5"
+gix-actor = "0.35.6"
+gix-date = "0.10.7"
+gix-features = "0.44.1"
+gix-hash = "0.20.1"
+gix-object = "0.51.1"
+gix-pack = "0.61.1"
 hashbrown = "0.16.0"
-indoc = "2.0.6"
-liblzma = { version = "0.4.4", features = ["static"] }
+indoc = "2.0.7"
+liblzma = { version = "0.4.5", features = ["static"] }
 lru-mem = "0.3.0"
 lz4_flex = "0.11.5"
 minijinja = "2.12.0"
-serde = { version = "1.0.225", features = ["derive"] }
+serde = { version = "1.0.228", features = ["derive"] }
 smallvec = "1.15.1"
-toml = "0.9.7"
+toml = "0.9.8"
 tracing = "0.1.41"
 tracing-subscriber = "0.3.20"
 uuid = "1.18.1"
 zstd = "0.13.3"
 
 [dependencies.regex-automata]
-version = "0.4.10"
+version = "0.4.13"
 default-features = false
 features = ["dfa", "hybrid", "meta", "nfa", "perf", "std", "syntax"]
 
 [dependencies.regex-syntax]
-version = "0.8.6"
+version = "0.8.8"
 default-features = false
 features = ["std"]
 
 [dev-dependencies]
-gix = "0.73.0"
+gix = "0.74.1"
 libtest-mimic = "0.8.1"
 rand = "0.9.1"
 serde_yaml = "0.9.34"
