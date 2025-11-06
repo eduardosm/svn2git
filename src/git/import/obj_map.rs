@@ -7,6 +7,7 @@ fn get_u64_hash(id: &ObjectId) -> u64 {
             let (hash_chunk, _) = hash.split_first_chunk().unwrap();
             u64::from_ne_bytes(*hash_chunk)
         }
+        _ => unreachable!(),
     }
 }
 
