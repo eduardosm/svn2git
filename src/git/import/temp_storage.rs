@@ -5,7 +5,8 @@ use gix_hash::ObjectId;
 
 use super::super::delta;
 use super::ImportError;
-use super::obj_map::ObjMap;
+
+use crate::FHashMap;
 
 pub(super) struct TempStorage {
     path: std::path::PathBuf,
@@ -215,7 +216,7 @@ impl TempStorage {
 }
 
 struct ObjsInfo {
-    map: Mutex<ObjMap<ObjInfo>>,
+    map: Mutex<FHashMap<ObjectId, ObjInfo>>,
     condvar: Condvar,
 }
 
@@ -230,7 +231,7 @@ struct ObjInfo {
 impl ObjsInfo {
     fn new() -> Self {
         Self {
-            map: Mutex::new(ObjMap::new()),
+            map: Mutex::new(FHashMap::default()),
             condvar: Condvar::new(),
         }
     }
@@ -241,8 +242,8 @@ impl ObjsInfo {
 
     fn pre_insert(&self, obj_id: ObjectId, kind: gix_object::Kind) -> Option<u64> {
         match self.map.lock().unwrap().entry(obj_id) {
-            super::obj_map::Entry::Occupied(entry) => Some(entry.get().offset),
-            super::obj_map::Entry::Vacant(entry) => {
+            std::collections::hash_map::Entry::Occupied(entry) => Some(entry.get().offset),
+            std::collections::hash_map::Entry::Vacant(entry) => {
                 entry.insert(ObjInfo {
                     offset: u64::MAX,
                     kind,
@@ -262,7 +263,7 @@ impl ObjsInfo {
         delta_base: Option<ObjectId>,
     ) {
         let mut map = self.map.lock().unwrap();
-        let info = map.get_mut(obj_id).unwrap();
+        let info = map.get_mut(&obj_id).unwrap();
         assert_eq!(info.offset, u64::MAX);
         info.offset = offset;
         info.delta_depth = delta_depth;
@@ -274,7 +275,7 @@ impl ObjsInfo {
     fn with_info<R>(&self, obj_id: ObjectId, f: impl FnOnce(&ObjInfo) -> R) -> Option<R> {
         let mut map = self.map.lock().unwrap();
         loop {
-            let info = map.get(obj_id)?;
+            let info = map.get(&obj_id)?;
             if info.offset != u64::MAX {
                 return Some(f(info));
             }

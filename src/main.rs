@@ -27,6 +27,9 @@ mod user_map;
 
 use term_out::ProgressPrint;
 
+type FHashMap<K, V> = std::collections::HashMap<K, V, foldhash::fast::RandomState>;
+type FHashSet<T> = std::collections::HashSet<T, foldhash::fast::RandomState>;
+
 enum RunError {
     Generic,
     Usage,

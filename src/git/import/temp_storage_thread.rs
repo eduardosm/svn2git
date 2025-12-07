@@ -5,8 +5,9 @@ use gix_hash::ObjectId;
 use gix_object::{Object, ObjectRef};
 
 use super::ImportError;
-use super::obj_map::ObjMap;
 use super::temp_storage::TempStorage;
+
+use crate::FHashMap;
 
 pub(super) struct TempStorageThread {
     data: Arc<Data>,
@@ -20,7 +21,7 @@ struct Data {
 }
 
 struct Inner {
-    pending: ObjMap<(gix_object::Kind, Vec<u8>, Option<ObjectId>)>,
+    pending: FHashMap<ObjectId, (gix_object::Kind, Vec<u8>, Option<ObjectId>)>,
     error: Option<ImportError>,
 }
 
@@ -31,7 +32,7 @@ impl TempStorageThread {
         let data = Arc::new(Data {
             storage,
             inner: Mutex::new(Inner {
-                pending: ObjMap::new(),
+                pending: FHashMap::default(),
                 error: None,
             }),
         });
@@ -89,8 +90,8 @@ impl TempStorageThread {
         let mut inner = self.data.inner.lock().unwrap();
 
         match inner.pending.entry(obj_id) {
-            super::obj_map::Entry::Occupied(_) => {}
-            super::obj_map::Entry::Vacant(entry) => {
+            std::collections::hash_map::Entry::Occupied(_) => {}
+            std::collections::hash_map::Entry::Vacant(entry) => {
                 let obj_size = raw_obj.len();
 
                 entry.insert((obj_kind, raw_obj, delta_base));
@@ -119,7 +120,7 @@ impl TempStorageThread {
         obj_id: ObjectId,
     ) -> Result<(gix_object::Kind, Vec<u8>), ImportError> {
         let mut inner = self.data.inner.lock().unwrap();
-        if let Some((obj_kind, raw_obj, _)) = inner.pending.get(obj_id) {
+        if let Some((obj_kind, raw_obj, _)) = inner.pending.get(&obj_id) {
             Ok((*obj_kind, raw_obj.clone()))
         } else {
             if let Some(e) = inner.error.take() {
@@ -134,7 +135,7 @@ impl TempStorageThread {
         while let Some(obj_id) = receiver.recv() {
             let mut inner = data.inner.lock().unwrap();
 
-            let (obj_kind, raw_obj, delta_base) = inner.pending.remove(obj_id).unwrap();
+            let (obj_kind, raw_obj, delta_base) = inner.pending.remove(&obj_id).unwrap();
             if let Err(e) = data
                 .storage
                 .insert_raw_with_oid(obj_id, obj_kind, raw_obj, delta_base, inner)
