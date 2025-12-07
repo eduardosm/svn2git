@@ -5,7 +5,8 @@ use gix_hash::ObjectId;
 use gix_object::tree::{EntryKind, EntryMode};
 use gix_object::{Object, ObjectRef};
 
-mod obj_map;
+use crate::{FHashMap, FHashSet};
+
 mod temp_storage;
 mod temp_storage_thread;
 mod tree_builder;
@@ -365,15 +366,15 @@ fn gather_objects(
     tmp_storage: &temp_storage::TempStorage,
     mut cb: impl FnMut(ImportFinishProgress),
 ) -> Result<Vec<ObjectId>, ImportError> {
-    let mut seen_objects = obj_map::ObjMap::new();
+    let mut seen_objects = FHashSet::default();
     let mut obj_queue = VecDeque::new();
 
     fn see(
         obj_id: ObjectId,
-        seen_objects: &mut obj_map::ObjMap<()>,
+        seen_objects: &mut FHashSet<ObjectId>,
         obj_queue: &mut VecDeque<ObjectId>,
     ) {
-        if seen_objects.insert(obj_id, ()).is_none() {
+        if seen_objects.insert(obj_id) {
             obj_queue.push_back(obj_id);
         }
     }
@@ -402,7 +403,7 @@ fn gather_objects(
                             see(entry.oid.to_owned(), &mut seen_objects, &mut obj_queue);
                         }
                         EntryKind::Blob | EntryKind::BlobExecutable | EntryKind::Link => {
-                            seen_objects.insert(entry.oid.to_owned(), ());
+                            seen_objects.insert(entry.oid.to_owned());
                         }
                         EntryKind::Commit => {}
                     }
@@ -433,7 +434,7 @@ fn gather_objects(
 
     cb(ImportFinishProgress::Sort(seen_objects.len()));
 
-    let mut seen_objects = seen_objects.keys().collect::<Vec<_>>();
+    let mut seen_objects = seen_objects.iter().copied().collect::<Vec<_>>();
     seen_objects.sort_by_key(|&oid| tmp_storage.get_offset(oid).unwrap());
 
     Ok(seen_objects)
@@ -476,14 +477,14 @@ fn write_pack_data(
     pack_data_offset += u64::try_from(pack_data_header.len()).unwrap();
 
     let mut index_entries = Vec::new();
-    let mut offset_map = obj_map::ObjMap::new();
+    let mut offset_map = FHashMap::default();
 
     for (i, oid) in seen_objects.enumerate() {
         let entry_offset = pack_data_offset;
 
         let (obj_kind, delta_base_oid, mut raw_obj) = tmp_storage.get_raw_maybe_delta(oid)?;
         let header;
-        if let Some(base_offset) = delta_base_oid.and_then(|base_oid| offset_map.get(base_oid)) {
+        if let Some(base_offset) = delta_base_oid.and_then(|base_oid| offset_map.get(&base_oid)) {
             header = gix_pack::data::entry::Header::OfsDelta {
                 base_distance: entry_offset - base_offset,
             };
