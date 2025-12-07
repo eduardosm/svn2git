@@ -5,7 +5,6 @@ use gix_hash::ObjectId;
 
 use super::super::delta;
 use super::ImportError;
-
 use crate::FHashMap;
 
 pub(super) struct TempStorage {

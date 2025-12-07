@@ -6,7 +6,6 @@ use gix_object::{Object, ObjectRef};
 
 use super::ImportError;
 use super::temp_storage::TempStorage;
-
 use crate::FHashMap;
 
 pub(super) struct TempStorageThread {
