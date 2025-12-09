@@ -2,7 +2,6 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Condvar, Mutex};
 
 use gix_hash::ObjectId;
-use gix_object::{Object, ObjectRef};
 
 use super::ImportError;
 use super::temp_storage::TempStorage;
@@ -62,30 +61,13 @@ impl TempStorageThread {
         Ok(data.storage)
     }
 
-    pub(crate) fn insert(
-        &self,
-        object: impl gix_object::WriteTo,
-        hash_kind: gix_hash::Kind,
-        delta_base: Option<ObjectId>,
-    ) -> Result<ObjectId, ImportError> {
-        let obj_kind = object.kind();
-
-        let mut raw_obj = Vec::new();
-        gix_object::WriteTo::write_to(&object, &mut raw_obj).unwrap();
-
-        self.insert_raw(obj_kind, raw_obj, hash_kind, delta_base)
-    }
-
     pub(crate) fn insert_raw(
         &self,
+        obj_id: ObjectId,
         obj_kind: gix_object::Kind,
         raw_obj: Vec<u8>,
-        hash_kind: gix_hash::Kind,
         delta_base: Option<ObjectId>,
-    ) -> Result<ObjectId, ImportError> {
-        let obj_id = gix_object::compute_hash(hash_kind, obj_kind, &raw_obj)
-            .expect("SHA-1 collision attack detected");
-
+    ) -> Result<(), ImportError> {
         let mut inner = self.data.inner.lock().unwrap();
 
         match inner.pending.entry(obj_id) {
@@ -102,16 +84,7 @@ impl TempStorageThread {
             }
         }
 
-        Ok(obj_id)
-    }
-
-    pub(crate) fn get(&self, obj_id: ObjectId) -> Result<Object, ImportError> {
-        let (obj_kind, raw_obj) = self.get_raw(obj_id)?;
-
-        let obj = ObjectRef::from_bytes(obj_kind, &raw_obj)
-            .map_err(|_| ImportError::ParseObjectError { oid: obj_id })?;
-
-        Ok(obj.into_owned())
+        Ok(())
     }
 
     pub(crate) fn get_raw(
