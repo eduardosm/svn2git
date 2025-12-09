@@ -154,7 +154,8 @@ impl Importer {
         let temp_storage = temp_storage::TempStorage::create(path, obj_cache_size)?;
         let temp_storage = temp_storage_thread::TempStorageThread::new(temp_storage);
 
-        let empty_tree_oid = temp_storage.insert(gix_object::Tree::empty(), hash_kind, None)?;
+        let empty_tree_oid =
+            Self::put_inner(gix_object::Tree::empty(), hash_kind, None, &temp_storage)?;
 
         Ok(Self {
             path: path.to_path_buf(),
@@ -221,7 +222,26 @@ impl Importer {
         object: impl gix_object::WriteTo,
         delta_base: Option<ObjectId>,
     ) -> Result<ObjectId, ImportError> {
-        self.temp_storage.insert(object, self.hash_kind, delta_base)
+        Self::put_inner(object, self.hash_kind, delta_base, &self.temp_storage)
+    }
+
+    fn put_inner(
+        object: impl gix_object::WriteTo,
+        hash_kind: gix_hash::Kind,
+        delta_base: Option<ObjectId>,
+        temp_storage: &temp_storage_thread::TempStorageThread,
+    ) -> Result<ObjectId, ImportError> {
+        let obj_kind = object.kind();
+
+        let mut raw_obj = Vec::new();
+        gix_object::WriteTo::write_to(&object, &mut raw_obj).unwrap();
+
+        let obj_id = gix_object::compute_hash(hash_kind, obj_kind, &raw_obj)
+            .expect("SHA-1 collision attack detected");
+
+        temp_storage.insert_raw(obj_id, obj_kind, raw_obj, delta_base)?;
+
+        Ok(obj_id)
     }
 
     pub(crate) fn put_blob(
@@ -229,8 +249,12 @@ impl Importer {
         data: Vec<u8>,
         delta_base: Option<ObjectId>,
     ) -> Result<ObjectId, ImportError> {
+        let obj_id = gix_object::compute_hash(self.hash_kind, gix_object::Kind::Blob, &data)
+            .expect("SHA-1 collision attack detected");
+
         self.temp_storage
-            .insert_raw(gix_object::Kind::Blob, data, self.hash_kind, delta_base)
+            .insert_raw(obj_id, gix_object::Kind::Blob, data, delta_base)?;
+        Ok(obj_id)
     }
 
     pub(crate) fn get_raw(&self, id: ObjectId) -> Result<(gix_object::Kind, Vec<u8>), ImportError> {
@@ -241,7 +265,11 @@ impl Importer {
         &self,
         id: ObjectId,
     ) -> Result<T, ImportError> {
-        let obj = self.temp_storage.get(id)?;
+        let (obj_kind, raw_obj) = self.temp_storage.get_raw(id)?;
+
+        let obj = ObjectRef::from_bytes(obj_kind, &raw_obj)
+            .map_err(|_| ImportError::ParseObjectError { oid: id })?
+            .into_owned();
 
         T::try_from(obj).map_err(|obj| ImportError::UnexpectedObjectKind {
             id,
