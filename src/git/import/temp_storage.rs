@@ -88,8 +88,8 @@ impl TempStorage {
             }
 
             if delta_base_info.delta_depth < 50 {
-                let delta_table = delta::create_delta_table(&delta_base, 4);
-                if let Some(delta) = delta::diff(&delta_table, &obj_data) {
+                let delta_window_shift = 4;
+                if let Some(delta) = delta::diff(&delta_base, &obj_data, delta_window_shift) {
                     debug_assert_eq!(delta::patch(&delta_base, &delta).unwrap(), obj_data);
                     delta_data = Some((delta, delta_base_oid, delta_base_info.delta_depth + 1));
                 }

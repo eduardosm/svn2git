@@ -146,14 +146,34 @@ fn read_header_size(delta: &mut &[u8]) -> Option<usize> {
     None
 }
 
-pub(super) struct DeltaTable<'a> {
-    src: &'a [u8],
-    window_shift: u32,
+struct DeltaTable {
     table: Vec<u32>,
     mask: u32,
 }
 
-impl DeltaTable<'_> {
+impl DeltaTable {
+    fn create(src: &[u8], window_shift: u32) -> Self {
+        // Delta format cannot encode offsets larger than 32 bits
+        let max_offset = u32::try_from(src.len()).unwrap_or(u32::MAX) as usize;
+
+        let window_len = 1usize.checked_shl(window_shift).unwrap();
+
+        let num_entries = (max_offset >> window_shift).next_power_of_two();
+        let mut table = Self {
+            table: vec![u32::MAX; num_entries],
+            mask: u32::try_from(num_entries - 1).unwrap(),
+        };
+
+        for (i, src_chunk) in src[..max_offset].chunks_exact(window_len).enumerate() {
+            let hash = cyclic_poly_23::CyclicPoly32::from_block(src_chunk).value();
+
+            let offset = i * window_len;
+            table.insert(hash, offset);
+        }
+
+        table
+    }
+
     fn insert(&mut self, hash: u32, offset: usize) {
         let entry = &mut self.table[(hash & self.mask) as usize];
         if *entry == u32::MAX {
@@ -171,36 +191,13 @@ impl DeltaTable<'_> {
     }
 }
 
-pub(super) fn create_delta_table(src: &[u8], window_shift: u32) -> DeltaTable<'_> {
-    // Delta format cannot encode offsets larger than 32 bits
-    let max_offset = u32::try_from(src.len()).unwrap_or(u32::MAX) as usize;
-
+pub(super) fn diff(base: &[u8], target: &[u8], window_shift: u32) -> Option<Vec<u8>> {
     let window_len = 1usize.checked_shl(window_shift).unwrap();
-
-    let num_entries = (max_offset >> window_shift).next_power_of_two();
-    let mut table = DeltaTable {
-        src,
-        window_shift,
-        table: vec![u32::MAX; num_entries],
-        mask: u32::try_from(num_entries - 1).unwrap(),
-    };
-
-    for (i, src_chunk) in src[..max_offset].chunks_exact(window_len).enumerate() {
-        let hash = cyclic_poly_23::CyclicPoly32::from_block(src_chunk).value();
-
-        let offset = i * window_len;
-        table.insert(hash, offset);
-    }
-
-    table
-}
-
-pub(super) fn diff(table: &DeltaTable<'_>, target: &[u8]) -> Option<Vec<u8>> {
-    let base = table.src;
-    let window_len = 1usize.checked_shl(table.window_shift).unwrap();
-    if target.len() < window_len {
+    if target.len() <= window_len.max(16) {
         return None;
     }
+
+    let table = DeltaTable::create(base, window_shift);
 
     let mut out = Vec::new();
     encode_header_size(base.len(), &mut out);
@@ -385,7 +382,7 @@ fn encode_header_size(size: usize, out: &mut Vec<u8>) {
 
 #[cfg(test)]
 mod tests {
-    use super::{create_delta_table, diff, encode_header_size, patch, read_header_size};
+    use super::{diff, encode_header_size, patch, read_header_size};
 
     #[test]
     fn tests_header_size() {
@@ -421,8 +418,7 @@ mod tests {
     #[test]
     fn test_diff_and_patch() {
         fn test(base: &[u8], target: &[u8], window_shift: u32, expected_diff: &[u8]) {
-            let table = create_delta_table(base, window_shift);
-            let diff = diff(&table, target).unwrap();
+            let diff = diff(base, target, window_shift).unwrap();
             if diff != expected_diff {
                 panic!(
                     "\"{}\" != \"{}\"",
