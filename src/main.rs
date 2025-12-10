@@ -15,7 +15,6 @@ use std::process::ExitCode;
 
 mod cli;
 mod convert;
-mod errors;
 mod git;
 mod make_meta;
 mod params_file;
