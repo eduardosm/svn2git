@@ -151,7 +151,8 @@ impl Importer {
 
         let hash_kind = gix_hash::Kind::Sha1;
 
-        let temp_storage = temp_storage::TempStorage::create(path, obj_cache_size)?;
+        let temp_storage =
+            temp_storage::TempStorage::create(&path.join("temp_storage"), obj_cache_size)?;
         let temp_storage = temp_storage_thread::TempStorageThread::new(temp_storage);
 
         let empty_tree_oid =

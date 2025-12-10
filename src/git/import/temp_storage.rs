@@ -15,30 +15,25 @@ pub(super) struct TempStorage {
 }
 
 impl TempStorage {
-    pub(super) fn create(
-        dir_path: &std::path::Path,
-        cache_size: usize,
-    ) -> Result<Self, ImportError> {
-        let path = dir_path.join("temp_storage");
-
+    pub(super) fn create(path: &std::path::Path, cache_size: usize) -> Result<Self, ImportError> {
         let mut file = std::fs::OpenOptions::new()
             .create_new(true)
             .read(true)
             .write(true)
-            .open(&path)
+            .open(path)
             .map_err(|e| ImportError::CreateFileError {
-                path: path.clone(),
+                path: path.into(),
                 error: e,
             })?;
 
         file.write_all(b"\0temp storage\0")
             .map_err(|e| ImportError::WriteFileError {
-                path: path.clone(),
+                path: path.into(),
                 error: e,
             })?;
 
         Ok(Self {
-            path,
+            path: path.into(),
             file: Mutex::new(file),
             info: ObjsInfo::new(),
             cache: Cache::new(cache_size),
