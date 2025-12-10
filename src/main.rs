@@ -46,13 +46,10 @@ fn main() -> ExitCode {
 fn main_inner() -> Result<(), RunError> {
     let start = std::time::Instant::now();
 
-    let args = match <cli::Cli as clap::Parser>::try_parse() {
-        Ok(args) => args,
-        Err(e) => {
-            eprintln!("{e}");
-            return Err(RunError::Usage);
-        }
-    };
+    let args = <cli::Cli as clap::Parser>::try_parse().map_err(|e| {
+        eprintln!("{e}");
+        RunError::Usage
+    })?;
 
     let term_out = term_out::init(start, !args.no_progress);
     let progress_print = term_out.get_progress_print();
@@ -63,30 +60,26 @@ fn main_inner() -> Result<(), RunError> {
         .to_log_level_filter();
     let file_log_level = args.file_log_level.map(cli::LogLevel::to_log_level_filter);
 
-    if let Err(e) = init_logger(
+    init_logger(
         Some(stderr_log_level),
         args.log_file.as_deref(),
         file_log_level,
         progress_print.clone(),
-    ) {
+    )
+    .map_err(|e| {
         eprintln!("failed to initialize logging: {e}");
-        return Err(RunError::Generic);
-    }
+        RunError::Generic
+    })?;
 
-    let params_raw = match std::fs::read_to_string(&args.conv_params) {
-        Ok(r) => r,
-        Err(e) => {
-            eprintln!("failed to read {:?}: {e}", args.conv_params);
-            return Err(RunError::Generic);
-        }
-    };
-    let params: params_file::ConvParams = match toml::from_str(&params_raw) {
-        Ok(r) => r,
-        Err(e) => {
-            eprintln!("failed to parse {:?}: {e}", args.conv_params);
-            return Err(RunError::Generic);
-        }
-    };
+    let params_raw = std::fs::read_to_string(&args.conv_params).map_err(|e| {
+        eprintln!("failed to read {:?}: {e}", args.conv_params);
+        RunError::Generic
+    })?;
+
+    let params: params_file::ConvParams = toml::from_str(&params_raw).map_err(|e| {
+        eprintln!("failed to parse {:?}: {e}", args.conv_params);
+        RunError::Generic
+    })?;
 
     let merge_optional = path_pattern::PathPattern::new(
         params.merge_optional.iter().map(String::as_str),
