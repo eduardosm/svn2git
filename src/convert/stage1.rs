@@ -27,21 +27,15 @@ pub(super) fn run(
 ) -> Result<Output, ConvertError> {
     tracing::info!("Stage 1: import SVN repository");
 
-    let mut svn_dump_src = match svn::source::DumpSource::open(src_path) {
-        Ok(r) => r,
-        Err(e) => {
-            tracing::error!("failed to open SVN dump source: {e}");
-            return Err(ConvertError);
-        }
-    };
+    let mut svn_dump_src = svn::source::DumpSource::open(src_path).map_err(|e| {
+        tracing::error!("failed to open SVN dump source: {e}");
+        ConvertError
+    })?;
 
-    let svn_dump_reader = match svn::dump::DumpReader::new(svn_dump_src.stream()) {
-        Ok(r) => r,
-        Err(e) => {
-            tracing::error!("failed to read SVN dump: {e}");
-            return Err(ConvertError);
-        }
-    };
+    let svn_dump_reader = svn::dump::DumpReader::new(svn_dump_src.stream()).map_err(|e| {
+        tracing::error!("failed to read SVN dump: {e}");
+        ConvertError
+    })?;
 
     let r = Stage {
         progress_print,
@@ -279,13 +273,10 @@ impl Stage<'_> {
     }
 
     fn get_next_svn_dump_record(&mut self) -> Result<Option<svn::dump::Record>, ConvertError> {
-        match self.svn_dump_reader.next_record() {
-            Ok(r) => Ok(r),
-            Err(e) => {
-                tracing::error!("failed to read SVN dump record: {e}");
-                Err(ConvertError)
-            }
-        }
+        self.svn_dump_reader.next_record().map_err(|e| {
+            tracing::error!("failed to read SVN dump record: {e}");
+            ConvertError
+        })
     }
 
     fn run_inner(&mut self) -> Result<(), ConvertError> {
