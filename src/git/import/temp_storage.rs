@@ -73,8 +73,10 @@ impl TempStorage {
 
         let mut delta_data = None;
         if let Some(delta_base_oid) = delta_base_oid {
-            let (delta_base_info, delta_base) =
-                self.get_raw_with_info(delta_base_oid, |&info| info)?;
+            let delta_base_info = self
+                .info
+                .get(delta_base_oid)
+                .ok_or(ImportError::ObjectNotFound { id: delta_base_oid })?;
 
             if delta_base_info.kind != obj_kind {
                 return Err(ImportError::UnexpectedObjectKind {
@@ -84,6 +86,8 @@ impl TempStorage {
             }
 
             if delta_base_info.delta_depth < 50 {
+                let delta_base = self.get_raw_from_info(&delta_base_info)?;
+
                 let delta_window_shift = 4;
                 if let Some(delta) = delta::diff(&delta_base, &obj_data, delta_window_shift) {
                     debug_assert_eq!(delta::patch(&delta_base, &delta).unwrap(), obj_data);
@@ -112,37 +116,35 @@ impl TempStorage {
         &self,
         obj_id: ObjectId,
     ) -> Result<(gix_object::Kind, Vec<u8>), ImportError> {
-        self.get_raw_with_info(obj_id, |info| info.kind)
-    }
-
-    fn get_raw_with_info<T>(
-        &self,
-        obj_id: ObjectId,
-        f: impl FnOnce(&ObjInfo) -> T,
-    ) -> Result<(T, Vec<u8>), ImportError> {
-        let info = self
+        let obj_info = self
             .info
             .get(obj_id)
             .ok_or(ImportError::ObjectNotFound { id: obj_id })?;
 
-        let obj_data = if let Some(obj_data) = self.cache.get(info.offset) {
+        let obj_data = self.get_raw_from_info(&obj_info)?;
+
+        Ok((obj_info.kind, obj_data))
+    }
+
+    fn get_raw_from_info(&self, obj_info: &ObjInfo) -> Result<Vec<u8>, ImportError> {
+        let obj_data = if let Some(obj_data) = self.cache.get(obj_info.offset) {
             obj_data
         } else {
             let maybe_delta_data =
-                read_decompress(&self.file.lock().unwrap(), &self.path, info.offset)?;
+                read_decompress(&self.file.lock().unwrap(), &self.path, obj_info.offset)?;
 
-            let obj_data = if let Some(delta_base_oid) = info.delta_base {
+            let obj_data = if let Some(delta_base_oid) = obj_info.delta_base {
                 self.resolve_delta(&maybe_delta_data, delta_base_oid)?
             } else {
                 maybe_delta_data
             };
 
-            self.cache.insert(info.offset, obj_data.clone());
+            self.cache.insert(obj_info.offset, obj_data.clone());
 
             obj_data
         };
 
-        Ok((f(&info), obj_data))
+        Ok(obj_data)
     }
 
     pub(super) fn get_raw_maybe_delta(
