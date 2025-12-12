@@ -1,0 +1,63 @@
+svn-revs:
+  - props:
+      svn:log: init trunk
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+      - path: trunk/x
+        kind: file
+        action: add
+        text: "file x\n"
+      - path: trunk/.svn
+        kind: file
+        action: add
+        text: "file .svn\n"
+  - props:
+      svn:log: delete .svn
+    nodes:
+      - path: trunk/.svn
+        kind: file
+        action: delete
+  - props:
+      svn:log: replace .svn with directory
+    nodes:
+      - path: trunk/x
+        kind: file
+        action: add
+        text: "file x\n"
+      - path: trunk/.svn
+        kind: dir
+        action: add
+      - path: trunk/.svn/y
+        kind: file
+        action: add
+        text: "file y\n"
+
+conv-params: |
+  branches = ["trunk"]
+
+git-revs:
+  - rev: trunk~2
+    tree:
+      x:
+        type: normal
+        data: "file x\n"
+      .svn:
+        type: normal
+        data: "file .svn\n"
+  - rev: trunk~1
+    tree:
+      x:
+        type: normal
+        data: "file x\n"
+  - rev: trunk~0
+    tree:
+      x:
+        type: normal
+        data: "file x\n"
+      .svn:
+        type: dir
+      .svn/y:
+        type: normal
+        data: "file y\n"
