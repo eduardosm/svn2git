@@ -64,6 +64,8 @@ pub(super) fn run(
     Ok(r)
 }
 
+const META_FILE_NAME: &[u8] = b".";
+
 #[derive(Clone, Debug)]
 struct RootNodeOp {
     path: Vec<u8>,
@@ -236,7 +238,11 @@ impl Stage<'_> {
             .split(|&c| c == b'/' || (backslash && c == b'\\'))
             .enumerate()
         {
-            if component.is_empty() || component == b".svn" || component == b".git" {
+            if component.is_empty()
+                || component == b"."
+                || component == b".."
+                || component == b".git"
+            {
                 tracing::error!(
                     "invalid path component name: \"{}\"",
                     component.escape_ascii(),
@@ -409,7 +415,7 @@ impl Stage<'_> {
         if self.root_rev_data.is_empty() {
             let raw_empty_meta = meta::DirMetadata::default().serialize();
             self.tree_builder.mod_inline(
-                b".svn",
+                META_FILE_NAME,
                 gix_object::tree::EntryKind::Blob.into(),
                 raw_empty_meta,
                 None,
@@ -733,7 +739,7 @@ impl Stage<'_> {
                         let mut meta = None;
                         if let Some(props) = props {
                             if node_action == svn::dump::NodeAction::Change {
-                                let meta_path = concat_path(&node_path, b".svn");
+                                let meta_path = concat_path(&node_path, META_FILE_NAME);
                                 let (_, meta_blob_oid) = self
                                     .tree_builder
                                     .ls(&meta_path, self.git_import)?
@@ -746,7 +752,7 @@ impl Stage<'_> {
                                     })?;
                                 prev_meta_blob_oid = Some(meta_blob_oid);
                             } else if let Some((copy_from_rev, ref copy_from_path)) = copy_from {
-                                let meta_path = concat_path(copy_from_path, b".svn");
+                                let meta_path = concat_path(copy_from_path, META_FILE_NAME);
                                 let (_, meta_blob_oid) = self
                                     .git_import
                                     .ls(
@@ -843,7 +849,7 @@ impl Stage<'_> {
 
                         if let Some(meta) = meta {
                             let raw_meta = meta.serialize();
-                            let meta_path = concat_path(&node_path, b".svn");
+                            let meta_path = concat_path(&node_path, META_FILE_NAME);
                             self.tree_builder.mod_inline(
                                 &meta_path,
                                 gix_object::tree::EntryKind::Blob.into(),
@@ -1062,7 +1068,7 @@ impl Stage<'_> {
                         DirClass::BranchParent => {
                             let dir_tree = self.git_import.get::<gix_object::Tree>(tree_oid)?;
                             for dir_entry in dir_tree.entries.iter() {
-                                if dir_entry.filename.as_slice() == b".svn" {
+                                if dir_entry.filename.as_slice() == META_FILE_NAME {
                                     continue;
                                 }
 
@@ -1189,7 +1195,7 @@ impl Stage<'_> {
                                 .git_import
                                 .get::<gix_object::Tree>(copy_from_tree_oid)?;
                             for dir_entry in dir_tree.entries.iter() {
-                                if dir_entry.filename.as_slice() == b".svn" {
+                                if dir_entry.filename.as_slice() == META_FILE_NAME {
                                     continue;
                                 }
 
@@ -1764,7 +1770,7 @@ impl Stage<'_> {
         meta_tree_oid: gix_hash::ObjectId,
         dir_path: &[u8],
     ) -> Result<meta::DirMetadata, ConvertError> {
-        let meta_path = concat_path(dir_path, b".svn");
+        let meta_path = concat_path(dir_path, META_FILE_NAME);
         let (_, meta_blob_oid) =
             self.git_import
                 .ls(meta_tree_oid, &meta_path)?
