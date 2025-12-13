@@ -1,9 +1,9 @@
-use std::collections::{BTreeSet, HashMap, VecDeque};
+use std::collections::{BTreeSet, VecDeque};
 
 use super::options::Options;
 use super::{ConvertError, GitMetaMaker, git_wrap, stage1};
-use crate::git;
 use crate::term_out::ProgressPrint;
+use crate::{FHashMap, git};
 
 pub(super) fn run(
     progress_print: &ProgressPrint,
@@ -27,7 +27,7 @@ pub(super) fn run(
         unbranched_name,
         refs_names,
         last_unbranched_commit: None,
-        branch_rev_git_data: HashMap::new(),
+        branch_rev_git_data: FHashMap::default(),
     }
     .run(&reachable_revs)
 }
@@ -45,9 +45,9 @@ struct Stage<'a> {
     git_import: &'a mut git_wrap::Importer,
     stage1_out: &'a stage1::Output,
     unbranched_name: Option<String>,
-    refs_names: HashMap<usize, String>,
+    refs_names: FHashMap<usize, String>,
     last_unbranched_commit: Option<gix_hash::ObjectId>,
-    branch_rev_git_data: HashMap<usize, BranchRevGitData>,
+    branch_rev_git_data: FHashMap<usize, BranchRevGitData>,
 }
 
 impl Stage<'_> {
@@ -90,7 +90,7 @@ impl Stage<'_> {
         progress_print: &ProgressPrint,
         options: &Options,
         stage1_out: &stage1::Output,
-    ) -> (Option<String>, HashMap<usize, String>) {
+    ) -> (Option<String>, FHashMap<usize, String>) {
         tracing::info!("naming branches");
         progress_print.set_progress("naming branches".into());
 
@@ -157,7 +157,7 @@ impl Stage<'_> {
         }
 
         let mut final_unbranched_name = None;
-        let mut final_branch_name_map = HashMap::new();
+        let mut final_branch_name_map = FHashMap::default();
 
         // avoid prefix collisions
         // git does not allow the branch of a name the be the prefix of the name of another branch

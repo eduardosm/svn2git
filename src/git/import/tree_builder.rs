@@ -1,9 +1,8 @@
-use std::collections::HashMap;
-
 use gix_hash::ObjectId;
 use gix_object::tree::{EntryKind, EntryMode};
 
 use super::{ImportError, Importer};
+use crate::FHashMap;
 
 pub(crate) struct TreeBuilder {
     root: TreeBuilderRoot,
@@ -13,7 +12,7 @@ impl TreeBuilder {
     pub(crate) fn new() -> Self {
         Self {
             root: TreeBuilderRoot::Tree {
-                tree: HashMap::new(),
+                tree: FHashMap::default(),
                 base_oid: None,
             },
         }
@@ -25,7 +24,7 @@ impl TreeBuilder {
 
     pub(crate) fn clear(&mut self) {
         self.root = TreeBuilderRoot::Tree {
-            tree: HashMap::new(),
+            tree: FHashMap::default(),
             base_oid: None,
         };
     }
@@ -103,7 +102,7 @@ impl TreeBuilder {
         path: &'b [u8],
         create: bool,
         importer: &mut Importer,
-    ) -> Result<Option<(&'a mut HashMap<Vec<u8>, TreeBuilderEntry>, &'b [u8])>, ImportError> {
+    ) -> Result<Option<(&'a mut FHashMap<Vec<u8>, TreeBuilderEntry>, &'b [u8])>, ImportError> {
         let mut comps = path.split(|&c| c == b'/');
         let last_comp = comps.next_back().unwrap();
 
@@ -149,7 +148,7 @@ impl TreeBuilder {
             } else if create {
                 let entry = cur_tree.entry(dir_comp.to_vec()).or_insert_with(|| {
                     TreeBuilderEntry::SubTree {
-                        tree: HashMap::new(),
+                        tree: FHashMap::default(),
                         base_oid: None,
                     }
                 });
@@ -168,7 +167,7 @@ impl TreeBuilder {
     fn read_tree(
         tree_oid: ObjectId,
         importer: &mut Importer,
-    ) -> Result<HashMap<Vec<u8>, TreeBuilderEntry>, ImportError> {
+    ) -> Result<FHashMap<Vec<u8>, TreeBuilderEntry>, ImportError> {
         let (obj_kind, raw_obj) = importer.get_raw(tree_oid)?;
         if obj_kind != gix_object::Kind::Tree {
             return Err(ImportError::UnexpectedObjectKind {
@@ -200,7 +199,7 @@ impl TreeBuilder {
                 } else {
                     let tree_oid = importer.put(gix_object::Tree { entries: vec![] }, None)?;
                     self.root = TreeBuilderRoot::Tree {
-                        tree: HashMap::new(),
+                        tree: FHashMap::default(),
                         base_oid: None,
                     };
                     Ok(tree_oid)
@@ -211,7 +210,7 @@ impl TreeBuilder {
     }
 
     fn materialize_subtree(
-        sub_tree: &HashMap<Vec<u8>, TreeBuilderEntry>,
+        sub_tree: &FHashMap<Vec<u8>, TreeBuilderEntry>,
         base_oid: Option<ObjectId>,
         importer: &mut Importer,
     ) -> Result<Option<ObjectId>, ImportError> {
@@ -257,7 +256,7 @@ impl TreeBuilder {
 
 enum TreeBuilderRoot {
     Tree {
-        tree: HashMap<Vec<u8>, TreeBuilderEntry>,
+        tree: FHashMap<Vec<u8>, TreeBuilderEntry>,
         base_oid: Option<ObjectId>,
     },
     Ext(ObjectId),
@@ -265,7 +264,7 @@ enum TreeBuilderRoot {
 
 enum TreeBuilderEntry {
     SubTree {
-        tree: HashMap<Vec<u8>, TreeBuilderEntry>,
+        tree: FHashMap<Vec<u8>, TreeBuilderEntry>,
         base_oid: Option<ObjectId>,
     },
     Entry(EntryMode, ObjectId),

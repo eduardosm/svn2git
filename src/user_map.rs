@@ -1,7 +1,7 @@
-use std::collections::HashMap;
+use crate::FHashMap;
 
 pub(crate) struct UserMap {
-    map: HashMap<Vec<u8>, Vec<UserMapEntry>>,
+    map: FHashMap<Vec<u8>, Vec<UserMapEntry>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -36,12 +36,12 @@ impl std::fmt::Display for AuthorMapParseError {
 impl UserMap {
     pub(crate) fn new() -> Self {
         Self {
-            map: HashMap::new(),
+            map: FHashMap::default(),
         }
     }
 
     pub(crate) fn parse(src: &mut dyn std::io::BufRead) -> Result<Self, AuthorMapParseError> {
-        let mut map = HashMap::<Vec<_>, Vec<_>>::new();
+        let mut map = FHashMap::<Vec<_>, Vec<_>>::default();
 
         let mut line_i = 0;
         let mut line = Vec::new();

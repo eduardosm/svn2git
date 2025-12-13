@@ -1,5 +1,6 @@
-use std::collections::HashMap;
 use std::io::Read as _;
+
+use crate::FHashMap;
 
 // SVN dump file format described in
 // https://svn.apache.org/repos/asf/subversion/trunk/notes/dump-load-format.txt
@@ -28,7 +29,7 @@ pub(crate) enum Record {
 
 pub(crate) struct RevRecord {
     pub(crate) rev_no: u32,
-    pub(crate) properties: Option<HashMap<Vec<u8>, Vec<u8>>>,
+    pub(crate) properties: Option<FHashMap<Vec<u8>, Vec<u8>>>,
 }
 
 pub(crate) struct NodeRecord {
@@ -85,7 +86,7 @@ pub(crate) struct NodeCopyFrom {
 #[derive(Debug)]
 pub(crate) struct NodeProperties {
     pub(crate) is_delta: bool,
-    pub(crate) properties: HashMap<Vec<u8>, Option<Vec<u8>>>,
+    pub(crate) properties: FHashMap<Vec<u8>, Option<Vec<u8>>>,
 }
 
 pub(crate) struct NodeText {
@@ -509,7 +510,7 @@ impl<'a> DumpReader<'a> {
     }
 }
 
-type RecordHeader = HashMap<Vec<u8>, Vec<u8>>;
+type RecordHeader = FHashMap<Vec<u8>, Vec<u8>>;
 
 fn parse_header(r: &mut dyn std::io::BufRead) -> Result<Option<RecordHeader>, ReadError> {
     let mut buf = Vec::new();
@@ -521,7 +522,7 @@ fn parse_header(r: &mut dyn std::io::BufRead) -> Result<Option<RecordHeader>, Re
     if buf.is_empty() {
         return Ok(None);
     }
-    let mut map = HashMap::new();
+    let mut map = FHashMap::default();
     while buf != b"\n" {
         let line = buf.strip_suffix(b"\n").ok_or(ReadError::BrokenHeader)?;
 
@@ -538,14 +539,14 @@ fn parse_header(r: &mut dyn std::io::BufRead) -> Result<Option<RecordHeader>, Re
     Ok(Some(map))
 }
 
-type Properties = HashMap<Vec<u8>, Option<Vec<u8>>>;
+type Properties = FHashMap<Vec<u8>, Option<Vec<u8>>>;
 
 fn parse_properties(
     r: &mut dyn std::io::BufRead,
     is_delta: bool,
 ) -> Result<Properties, std::io::Error> {
     let mut buf = Vec::new();
-    let mut props = HashMap::new();
+    let mut props = FHashMap::default();
     loop {
         buf.clear();
         r.read_until(b'\n', &mut buf)?;

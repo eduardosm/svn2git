@@ -1,7 +1,7 @@
 use std::borrow::Cow;
-use std::collections::{HashMap, HashSet};
 
 use crate::path_pattern::PathPattern;
+use crate::{FHashMap, FHashSet};
 
 pub(crate) struct InitOptions {
     pub(crate) keep_deleted_branches: bool,
@@ -30,7 +30,7 @@ pub(crate) struct Options {
     pub(super) enable_merges: bool,
     pub(super) merge_optional: PathPattern,
     pub(super) avoid_fully_reverted_merges: bool,
-    pub(super) ignore_merges_at: HashMap<u32, HashSet<Vec<u8>>>,
+    pub(super) ignore_merges_at: FHashMap<u32, FHashSet<Vec<u8>>>,
     pub(super) generate_gitignore: bool,
     pub(super) delete_files: PathPattern,
     pub(super) git_obj_cache_size: usize,
@@ -44,7 +44,7 @@ enum DirSpecNode {
 
 struct ContainerDirSpecNode {
     wildcard: Option<bool>,
-    subdirs: HashMap<Vec<u8>, DirSpecNode>,
+    subdirs: FHashMap<Vec<u8>, DirSpecNode>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -63,7 +63,7 @@ impl Options {
         Self {
             root_dir_spec: ContainerDirSpecNode {
                 wildcard: None,
-                subdirs: HashMap::new(),
+                subdirs: FHashMap::default(),
             },
             rename_branches: BranchRenamer::new(),
             keep_deleted_branches: init.keep_deleted_branches,
@@ -76,7 +76,7 @@ impl Options {
             enable_merges: init.enable_merges,
             merge_optional: init.merge_optional,
             avoid_fully_reverted_merges: init.avoid_fully_reverted_merges,
-            ignore_merges_at: HashMap::new(),
+            ignore_merges_at: FHashMap::default(),
             generate_gitignore: init.generate_gitignore,
             delete_files: init.delete_files,
             git_obj_cache_size: init.git_obj_cache_size,
@@ -119,7 +119,7 @@ impl Options {
                 std::collections::hash_map::Entry::Vacant(entry) => {
                     let new_node = entry.insert(DirSpecNode::Container(ContainerDirSpecNode {
                         wildcard: None,
-                        subdirs: HashMap::new(),
+                        subdirs: FHashMap::default(),
                     }));
                     let DirSpecNode::Container(container) = new_node else {
                         unreachable!();
@@ -240,14 +240,14 @@ impl Options {
 }
 
 pub(super) struct BranchRenamer {
-    exact: HashMap<Vec<u8>, Vec<u8>>,
+    exact: FHashMap<Vec<u8>, Vec<u8>>,
     prefix: Vec<(Vec<u8>, Vec<u8>)>,
 }
 
 impl BranchRenamer {
     fn new() -> Self {
         Self {
-            exact: HashMap::new(),
+            exact: FHashMap::default(),
             prefix: Vec::new(),
         }
     }
@@ -291,15 +291,15 @@ impl BranchRenamer {
 }
 
 pub(super) struct PartialBranchSet {
-    exact: HashSet<Vec<u8>>,
-    prefix: HashSet<Vec<u8>>,
+    exact: FHashSet<Vec<u8>>,
+    prefix: FHashSet<Vec<u8>>,
 }
 
 impl PartialBranchSet {
     fn new() -> Self {
         Self {
-            exact: HashSet::new(),
-            prefix: HashSet::new(),
+            exact: FHashSet::default(),
+            prefix: FHashSet::default(),
         }
     }
 
