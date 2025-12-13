@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-
+use crate::FHashMap;
 use crate::convert::{GitCommitMeta, GitTagMeta};
 use crate::user_map::UserMap;
 
@@ -41,7 +40,7 @@ impl crate::convert::GitMetaMaker for GitMetaMaker<'_> {
         svn_uuid: Option<&uuid::Uuid>,
         svn_rev_no: u32,
         svn_path: Option<&[u8]>,
-        svn_rev_props: &HashMap<Vec<u8>, Vec<u8>>,
+        svn_rev_props: &FHashMap<Vec<u8>, Vec<u8>>,
     ) -> Result<GitCommitMeta, String> {
         let jinja_ctx = JinjaCtx::new(svn_uuid, svn_rev_no, svn_path, svn_rev_props, self.user_map);
 
@@ -85,7 +84,7 @@ impl crate::convert::GitMetaMaker for GitMetaMaker<'_> {
         svn_uuid: Option<&uuid::Uuid>,
         svn_rev_no: u32,
         svn_path: &[u8],
-        svn_rev_props: &HashMap<Vec<u8>, Vec<u8>>,
+        svn_rev_props: &FHashMap<Vec<u8>, Vec<u8>>,
     ) -> Result<GitTagMeta, String> {
         let jinja_ctx = JinjaCtx::new(
             svn_uuid,
@@ -154,7 +153,7 @@ impl GitMetaMaker<'_> {
 
     fn extract_rev_date(
         &self,
-        svn_rev_props: &HashMap<Vec<u8>, Vec<u8>>,
+        svn_rev_props: &FHashMap<Vec<u8>, Vec<u8>>,
     ) -> Result<Option<chrono::NaiveDateTime>, String> {
         svn_rev_props
             .get(b"svn:date".as_slice())
@@ -187,7 +186,7 @@ impl JinjaCtx {
         uuid: Option<&uuid::Uuid>,
         rev_no: u32,
         branch_path: Option<&[u8]>,
-        svn_rev_props: &HashMap<Vec<u8>, Vec<u8>>,
+        svn_rev_props: &FHashMap<Vec<u8>, Vec<u8>>,
         user_map: &UserMap,
     ) -> Self {
         let svn_author = svn_rev_props

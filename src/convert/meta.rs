@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use crate::FHashMap;
 
 #[derive(Default)]
 pub(super) struct DirMetadata {
@@ -10,7 +10,7 @@ pub(super) struct DirMetadata {
 
 impl DirMetadata {
     pub(super) fn from_props(
-        props: &HashMap<Vec<u8>, Option<Vec<u8>>>,
+        props: &FHashMap<Vec<u8>, Option<Vec<u8>>>,
         prev_meta: Option<Self>,
     ) -> Self {
         let mut new_meta = prev_meta.unwrap_or_default();
@@ -126,8 +126,11 @@ pub(super) fn svnignore_to_gitignore(svnignore: &[u8], is_global: bool) -> Vec<u
     gitignore
 }
 
-pub(super) fn parse_mergeinfo(raw1: &[u8], raw2: &[u8]) -> HashMap<Vec<u8>, Vec<(u32, u32, bool)>> {
-    let mut mergeinfo = HashMap::<Vec<u8>, Vec<(u32, u32, bool)>>::new();
+pub(super) fn parse_mergeinfo(
+    raw1: &[u8],
+    raw2: &[u8],
+) -> FHashMap<Vec<u8>, Vec<(u32, u32, bool)>> {
+    let mut mergeinfo = FHashMap::<Vec<u8>, Vec<(u32, u32, bool)>>::default();
     for raw in [raw1, raw2] {
         for line in raw.split(|&c| c == b'\n') {
             let line = line.strip_suffix(b"\r").unwrap_or(line);

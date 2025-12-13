@@ -1,9 +1,9 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use super::options::{DirClass, Options};
 use super::{ConvertError, git_wrap, meta};
-use crate::svn;
 use crate::term_out::ProgressPrint;
+use crate::{FHashMap, svn};
 
 pub(super) enum Head {
     Branch(usize),
@@ -45,14 +45,14 @@ pub(super) fn run(
         tree_builder: git_wrap::TreeBuilder::new(),
         svn_uuid: None,
         root_rev_data: Vec::new(),
-        svn_rev_map: HashMap::new(),
+        svn_rev_map: FHashMap::default(),
         unbranched_rev_data: Vec::new(),
         branch_data: Vec::new(),
         branch_rev_data: Vec::new(),
         head_branch: None,
-        live_branches: HashMap::new(),
-        path_to_branch: HashMap::new(),
-        branch_path_commits: HashMap::new(),
+        live_branches: FHashMap::default(),
+        path_to_branch: FHashMap::default(),
+        branch_path_commits: FHashMap::default(),
     }
     .run()?;
 
@@ -133,19 +133,19 @@ struct Stage<'a> {
     tree_builder: git_wrap::TreeBuilder,
     svn_uuid: Option<uuid::Uuid>,
     root_rev_data: Vec<RootCommitData>,
-    svn_rev_map: HashMap<u32, usize>,
+    svn_rev_map: FHashMap<u32, usize>,
     unbranched_rev_data: Vec<UnbranchedRevData>,
     branch_data: Vec<BranchData>,
     branch_rev_data: Vec<BranchRevData>,
     head_branch: Option<Head>,
-    live_branches: HashMap<Vec<u8>, usize>,
-    path_to_branch: HashMap<Vec<u8>, Vec<usize>>,
-    branch_path_commits: HashMap<Vec<u8>, Vec<(usize, usize)>>,
+    live_branches: FHashMap<Vec<u8>, usize>,
+    path_to_branch: FHashMap<Vec<u8>, Vec<usize>>,
+    branch_path_commits: FHashMap<Vec<u8>, Vec<(usize, usize)>>,
 }
 
 pub(super) struct RootCommitData {
     pub(super) svn_rev: u32,
-    pub(super) svn_rev_props: HashMap<Vec<u8>, Vec<u8>>,
+    pub(super) svn_rev_props: FHashMap<Vec<u8>, Vec<u8>>,
     pub(super) meta_tree_oid: gix_hash::ObjectId,
     pub(super) files_tree_oid: gix_hash::ObjectId,
 }
@@ -393,7 +393,7 @@ impl Stage<'_> {
         rev_record: svn::dump::RevRecord,
     ) -> Result<
         (
-            HashMap<Vec<u8>, Vec<u8>>,
+            FHashMap<Vec<u8>, Vec<u8>>,
             Option<svn::dump::Record>,
             Vec<RootNodeOp>,
             gix_hash::ObjectId,

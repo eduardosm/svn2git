@@ -1,7 +1,5 @@
-use std::collections::HashMap;
-
-use crate::git;
 use crate::term_out::ProgressPrint;
+use crate::{FHashMap, git};
 
 mod git_wrap;
 mod meta;
@@ -30,7 +28,7 @@ pub(crate) trait GitMetaMaker {
         svn_uuid: Option<&uuid::Uuid>,
         svn_rev_no: u32,
         svn_path: Option<&[u8]>,
-        svn_rev_props: &HashMap<Vec<u8>, Vec<u8>>,
+        svn_rev_props: &FHashMap<Vec<u8>, Vec<u8>>,
     ) -> Result<GitCommitMeta, String>;
 
     fn make_git_tag_meta(
@@ -38,7 +36,7 @@ pub(crate) trait GitMetaMaker {
         svn_uuid: Option<&uuid::Uuid>,
         svn_rev_no: u32,
         svn_path: &[u8],
-        svn_rev_props: &HashMap<Vec<u8>, Vec<u8>>,
+        svn_rev_props: &FHashMap<Vec<u8>, Vec<u8>>,
     ) -> Result<GitTagMeta, String>;
 }
 
