@@ -169,14 +169,14 @@ impl TreeBuilder {
         importer: &mut Importer,
     ) -> Result<FHashMap<Vec<u8>, TreeBuilderEntry>, ImportError> {
         let (obj_kind, raw_obj) = importer.get_raw(tree_oid)?;
-        if obj_kind != gix_object::Kind::Tree {
-            return Err(ImportError::UnexpectedObjectKind {
-                id: tree_oid,
-                kind: obj_kind,
-            });
-        }
-        let tree = gix_object::TreeRef::from_bytes(&raw_obj)
-            .map_err(|_| ImportError::ParseObjectError { oid: tree_oid })?;
+        assert_eq!(
+            obj_kind,
+            gix_object::Kind::Tree,
+            "unexpected object kind for {tree_oid}",
+        );
+        let tree = gix_object::TreeRef::from_bytes(&raw_obj).unwrap_or_else(|_| {
+            panic!("failed to parse object {tree_oid}");
+        });
 
         Ok(tree
             .entries

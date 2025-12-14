@@ -44,19 +44,6 @@ pub(crate) enum ImportError {
         dest_path: std::path::PathBuf,
         error: std::io::Error,
     },
-    ObjectNotFound {
-        id: ObjectId,
-    },
-    ParseObjectError {
-        oid: ObjectId,
-    },
-    UnexpectedObjectKind {
-        id: ObjectId,
-        kind: gix_object::Kind,
-    },
-    DeltaPatchError {
-        error: super::delta::PatchError,
-    },
     ParentPathIsNotDir {
         path: Vec<u8>,
     },
@@ -112,18 +99,6 @@ impl std::fmt::Display for ImportError {
                     f,
                     "failed to rename {source_path:?} to {dest_path:?}: {error}"
                 )
-            }
-            Self::ObjectNotFound { id } => {
-                write!(f, "object {id} not found")
-            }
-            Self::ParseObjectError { oid: id } => {
-                write!(f, "failed to parse object {id}")
-            }
-            Self::UnexpectedObjectKind { id, kind } => {
-                write!(f, "object {id} is a {kind}")
-            }
-            Self::DeltaPatchError { ref error } => {
-                write!(f, "failed to apply delta: {error}")
             }
             Self::ParentPathIsNotDir { ref path } => {
                 write!(
@@ -269,21 +244,23 @@ impl Importer {
         let (obj_kind, raw_obj) = self.temp_storage.get_raw(id)?;
 
         let obj = ObjectRef::from_bytes(obj_kind, &raw_obj)
-            .map_err(|_| ImportError::ParseObjectError { oid: id })?
+            .unwrap_or_else(|_| {
+                panic!("failed to parse object {id}");
+            })
             .into_owned();
 
-        T::try_from(obj).map_err(|obj| ImportError::UnexpectedObjectKind {
-            id,
-            kind: obj.kind(),
-        })
+        Ok(T::try_from(obj).unwrap_or_else(|obj| {
+            panic!("unexpected object kind for {id}: {}", obj.kind());
+        }))
     }
 
     pub(crate) fn get_blob(&self, id: ObjectId) -> Result<Vec<u8>, ImportError> {
         let (obj_kind, raw_obj) = self.temp_storage.get_raw(id)?;
-
-        if obj_kind != gix_object::Kind::Blob {
-            return Err(ImportError::UnexpectedObjectKind { id, kind: obj_kind });
-        }
+        assert_eq!(
+            obj_kind,
+            gix_object::Kind::Blob,
+            "unexpected object kind for {id}"
+        );
 
         Ok(raw_obj)
     }
@@ -306,15 +283,15 @@ impl Importer {
             }
 
             let (obj_kind, raw_obj) = self.get_raw(cur_oid)?;
-            if obj_kind != gix_object::Kind::Tree {
-                return Err(ImportError::UnexpectedObjectKind {
-                    id: cur_oid,
-                    kind: obj_kind,
-                });
-            }
+            assert_eq!(
+                obj_kind,
+                gix_object::Kind::Tree,
+                "unexpected object kind for {cur_oid}",
+            );
 
-            let cur_tree = gix_object::TreeRef::from_bytes(&raw_obj)
-                .map_err(|_| ImportError::ParseObjectError { oid: cur_oid })?;
+            let cur_tree = gix_object::TreeRef::from_bytes(&raw_obj).unwrap_or_else(|_| {
+                panic!("failed to parse object {cur_oid}");
+            });
 
             if let Some(entry) = cur_tree
                 .entries
@@ -420,8 +397,9 @@ fn gather_objects(
     while let Some(obj_id) = obj_queue.pop_front() {
         let (obj_kind, raw_obj) = tmp_storage.get_raw(obj_id)?;
 
-        let obj = ObjectRef::from_bytes(obj_kind, &raw_obj)
-            .map_err(|_| ImportError::ParseObjectError { oid: obj_id })?;
+        let obj = ObjectRef::from_bytes(obj_kind, &raw_obj).unwrap_or_else(|_| {
+            panic!("failed to parse object {obj_id}");
+        });
 
         let parse_hex_oid = |hex| ObjectId::from_hex(hex).unwrap();
         match obj {
@@ -438,7 +416,7 @@ fn gather_objects(
                     }
                 }
             }
-            ObjectRef::Blob(_) => {}
+            ObjectRef::Blob(_) => unreachable!(), // blobs are never added to the queue
             ObjectRef::Commit(commit) => {
                 see(
                     parse_hex_oid(commit.tree),

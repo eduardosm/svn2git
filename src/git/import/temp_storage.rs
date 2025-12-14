@@ -73,17 +73,11 @@ impl TempStorage {
 
         let mut delta_data = None;
         if let Some(delta_base_oid) = delta_base_oid {
-            let delta_base_info = self
-                .info
-                .get(delta_base_oid)
-                .ok_or(ImportError::ObjectNotFound { id: delta_base_oid })?;
+            let delta_base_info = self.info.get(delta_base_oid).unwrap_or_else(|| {
+                panic!("delta base object {delta_base_oid} not found");
+            });
 
-            if delta_base_info.kind != obj_kind {
-                return Err(ImportError::UnexpectedObjectKind {
-                    id: delta_base_oid,
-                    kind: delta_base_info.kind,
-                });
-            }
+            assert_eq!(delta_base_info.kind, obj_kind, "invalid delta base kind");
 
             if delta_base_info.delta_depth < 50 {
                 let delta_base = self.get_raw_from_info(&delta_base_info)?;
@@ -116,10 +110,9 @@ impl TempStorage {
         &self,
         obj_id: ObjectId,
     ) -> Result<(gix_object::Kind, Vec<u8>), ImportError> {
-        let obj_info = self
-            .info
-            .get(obj_id)
-            .ok_or(ImportError::ObjectNotFound { id: obj_id })?;
+        let obj_info = self.info.get(obj_id).unwrap_or_else(|| {
+            panic!("object {obj_id} not found");
+        });
 
         let obj_data = self.get_raw_from_info(&obj_info)?;
 
@@ -151,10 +144,9 @@ impl TempStorage {
         &self,
         obj_id: ObjectId,
     ) -> Result<(gix_object::Kind, Option<ObjectId>, Vec<u8>), ImportError> {
-        let info = self
-            .info
-            .get(obj_id)
-            .ok_or(ImportError::ObjectNotFound { id: obj_id })?;
+        let info = self.info.get(obj_id).unwrap_or_else(|| {
+            panic!("object {obj_id} not found");
+        });
 
         let data = read_decompress(&self.file.lock().unwrap(), &self.path, info.offset)?;
 
@@ -186,13 +178,15 @@ impl TempStorage {
         for &delta_offset in chain.iter().rev() {
             let delta_data = read_decompress(&self.file.lock().unwrap(), &self.path, delta_offset)?;
 
-            let target_data = delta::patch(&cur_data, &delta_data)
-                .map_err(|e| ImportError::DeltaPatchError { error: e })?;
+            let target_data = delta::patch(&cur_data, &delta_data).unwrap_or_else(|e| {
+                panic!("failed to apply delta: {e}");
+            });
             cur_data = target_data;
         }
 
-        let final_data = delta::patch(&cur_data, delta)
-            .map_err(|e| ImportError::DeltaPatchError { error: e })?;
+        let final_data = delta::patch(&cur_data, delta).unwrap_or_else(|e| {
+            panic!("failed to apply delta: {e}");
+        });
 
         Ok(final_data)
     }
