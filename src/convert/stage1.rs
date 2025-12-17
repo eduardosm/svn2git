@@ -535,14 +535,14 @@ impl Stage<'_> {
                             orig_blob = Some(blob);
                         } else if node_action == svn::dump::NodeAction::Change {
                             let (mode, blob) = tree_builder
-                                .ls(&node_path, self.git_import)?
+                                .ls_file(&node_path, self.git_import)?
                                 .ok_or_else(|| {
-                                    tracing::error!(
-                                        "attempted to change non-existent path \"{}\"",
-                                        node_path.escape_ascii(),
-                                    );
-                                    ConvertError
-                                })?;
+                                tracing::error!(
+                                    "attempted to change directory or non-existent path \"{}\"",
+                                    node_path.escape_ascii(),
+                                );
+                                ConvertError
+                            })?;
                             orig_mode = Some(mode);
                             orig_blob = Some(blob);
                         }
@@ -727,7 +727,7 @@ impl Stage<'_> {
                             if node_action == svn::dump::NodeAction::Change {
                                 let meta_path = concat_path(&node_path, META_FILE_NAME);
                                 let (_, meta_blob_oid) = tree_builder
-                                    .ls(&meta_path, self.git_import)?
+                                    .ls_file(&meta_path, self.git_import)?
                                     .ok_or_else(|| {
                                         tracing::error!(
                                             "missing directory metadata for \"{}\"",

@@ -74,7 +74,7 @@ impl TreeBuilder {
         }
     }
 
-    pub(crate) fn ls(
+    pub(crate) fn ls_file(
         &mut self,
         path: &[u8],
         importer: &mut Importer,
@@ -82,16 +82,9 @@ impl TreeBuilder {
         if let Some((entry_tree, entry_name)) = self.find_entry(path, false, false, importer)? {
             if let Some(entry) = entry_tree.entries.get_mut(entry_name) {
                 match *entry {
+                    TreeBuilderEntry::Entry(mode, _) if mode.is_tree() => Ok(None),
                     TreeBuilderEntry::Entry(mode, oid) => Ok(Some((mode, oid))),
-                    TreeBuilderEntry::SubTree(ref sub_tree) => {
-                        if let Some(oid) = Self::materialize_sub_tree(sub_tree, importer)? {
-                            let mode = EntryKind::Tree.into();
-                            *entry = TreeBuilderEntry::Entry(mode, oid);
-                            Ok(Some((mode, oid)))
-                        } else {
-                            Ok(None)
-                        }
-                    }
+                    TreeBuilderEntry::SubTree(_) => Ok(None),
                 }
             } else {
                 Ok(None)

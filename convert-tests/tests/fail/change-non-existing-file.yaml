@@ -20,4 +20,4 @@ failed: true
 
 logs: |
   D svn2git::convert::stage1: importing SVN revision 2
-  E svn2git::convert::stage1: attempted to change non-existent path "trunk/x"
+  E svn2git::convert::stage1: attempted to change directory or non-existent path "trunk/x"
