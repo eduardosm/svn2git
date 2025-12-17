@@ -98,12 +98,10 @@ impl TreeBuilder {
         }
     }
 
-    pub(super) fn reset(&mut self, base: gix_hash::ObjectId) {
-        self.tree_builder.reset(base);
-    }
-
-    pub(super) fn clear(&mut self) {
-        self.tree_builder.clear();
+    pub(crate) fn with_base(base: gix_hash::ObjectId) -> Self {
+        Self {
+            tree_builder: git::TreeBuilder::with_base(base),
+        }
     }
 
     pub(super) fn mod_oid(
@@ -173,7 +171,7 @@ impl TreeBuilder {
     }
 
     pub(super) fn materialize(
-        &mut self,
+        self,
         importer: &mut Importer,
     ) -> Result<gix_hash::ObjectId, ConvertError> {
         self.tree_builder

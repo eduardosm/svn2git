@@ -15,12 +15,10 @@ impl TreeBuilder {
         }
     }
 
-    pub(crate) fn reset(&mut self, base: ObjectId) {
-        self.root = TreeBuilderRoot::Ext(base);
-    }
-
-    pub(crate) fn clear(&mut self) {
-        self.root = TreeBuilderRoot::Tree(TreeBuilderTree::empty());
+    pub(crate) fn with_base(base: ObjectId) -> Self {
+        Self {
+            root: TreeBuilderRoot::Ext(base),
+        }
     }
 
     pub(crate) fn mod_oid(
@@ -188,7 +186,7 @@ impl TreeBuilder {
         })
     }
 
-    pub(crate) fn materialize(&mut self, importer: &mut Importer) -> Result<ObjectId, ImportError> {
+    pub(crate) fn materialize(mut self, importer: &mut Importer) -> Result<ObjectId, ImportError> {
         match self.root {
             TreeBuilderRoot::Tree(ref tree) => {
                 if let Some(tree_oid) = Self::materialize_sub_tree(tree, importer)? {
