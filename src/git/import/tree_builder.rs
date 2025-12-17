@@ -54,11 +54,23 @@ impl TreeBuilder {
         Ok(blob_oid)
     }
 
-    pub(crate) fn rm(&mut self, path: &[u8], importer: &mut Importer) -> Result<bool, ImportError> {
+    pub(crate) fn rm(
+        &mut self,
+        path: &[u8],
+        importer: &mut Importer,
+    ) -> Result<Option<(EntryMode, ObjectId)>, ImportError> {
         if let Some((entry_tree, entry_name)) = self.find_entry(path, true, false, importer)? {
-            Ok(entry_tree.entries.remove(entry_name).is_some())
+            Ok(entry_tree
+                .entries
+                .remove(entry_name)
+                .and_then(|entry| match entry {
+                    TreeBuilderEntry::Entry(mode, oid) => Some((mode, oid)),
+                    TreeBuilderEntry::SubTree(sub_tree) => {
+                        sub_tree.base_oid.map(|oid| (EntryKind::Tree.into(), oid))
+                    }
+                }))
         } else {
-            Ok(false)
+            Ok(None)
         }
     }
 

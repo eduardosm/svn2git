@@ -145,7 +145,7 @@ impl TreeBuilder {
         &mut self,
         path: &[u8],
         importer: &mut Importer,
-    ) -> Result<bool, ConvertError> {
+    ) -> Result<Option<(gix_object::tree::EntryMode, gix_hash::ObjectId)>, ConvertError> {
         self.tree_builder
             .rm(path, &mut importer.importer)
             .map_err(|e| {
