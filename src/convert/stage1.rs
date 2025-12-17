@@ -42,7 +42,6 @@ pub(super) fn run(
         options,
         svn_dump_reader,
         git_import,
-        tree_builder: git_wrap::TreeBuilder::new(),
         svn_uuid: None,
         root_rev_data: Vec::new(),
         svn_rev_map: FHashMap::default(),
@@ -130,7 +129,6 @@ struct Stage<'a> {
     options: &'a Options,
     svn_dump_reader: svn::dump::DumpReader<'a>,
     git_import: &'a mut git_wrap::Importer,
-    tree_builder: git_wrap::TreeBuilder,
     svn_uuid: Option<uuid::Uuid>,
     root_rev_data: Vec<RootCommitData>,
     svn_rev_map: FHashMap<u32, usize>,
@@ -400,11 +398,11 @@ impl Stage<'_> {
         ),
         ConvertError,
     > {
-        if let Some(prev_rev_data) = self.root_rev_data.last() {
-            self.tree_builder.reset(prev_rev_data.meta_tree_oid);
+        let mut tree_builder = if let Some(prev_rev_data) = self.root_rev_data.last() {
+            git_wrap::TreeBuilder::with_base(prev_rev_data.meta_tree_oid)
         } else {
-            self.tree_builder.clear();
-        }
+            git_wrap::TreeBuilder::new()
+        };
 
         let svn_rev = rev_record.rev_no;
         assert!(!self.svn_rev_map.contains_key(&svn_rev));
@@ -414,7 +412,7 @@ impl Stage<'_> {
 
         if self.root_rev_data.is_empty() {
             let raw_empty_meta = meta::DirMetadata::default().serialize();
-            self.tree_builder.mod_inline(
+            tree_builder.mod_inline(
                 META_FILE_NAME,
                 gix_object::tree::EntryKind::Blob.into(),
                 raw_empty_meta,
@@ -463,8 +461,7 @@ impl Stage<'_> {
             let mut props = node_record.properties.as_ref();
 
             if node_action == svn::dump::NodeAction::Replace {
-                let (prev_mode, prev_hash) = self
-                    .tree_builder
+                let (prev_mode, prev_hash) = tree_builder
                     .ls(&node_path, self.git_import)?
                     .ok_or_else(|| {
                         tracing::error!(
@@ -474,7 +471,7 @@ impl Stage<'_> {
                         ConvertError
                     })?;
 
-                self.tree_builder.rm(&node_path, self.git_import)?;
+                tree_builder.rm(&node_path, self.git_import)?;
                 node_ops.push(RootNodeOp {
                     path: node_path.clone(),
                     action: if prev_mode.is_tree() {
@@ -487,8 +484,7 @@ impl Stage<'_> {
 
             match node_action {
                 svn::dump::NodeAction::Delete => {
-                    let (prev_mode, prev_hash) = self
-                        .tree_builder
+                    let (prev_mode, prev_hash) = tree_builder
                         .ls(&node_path, self.git_import)?
                         .ok_or_else(|| {
                             tracing::error!(
@@ -498,7 +494,7 @@ impl Stage<'_> {
                             ConvertError
                         })?;
 
-                    self.tree_builder.rm(&node_path, self.git_import)?;
+                    tree_builder.rm(&node_path, self.git_import)?;
                     node_ops.push(RootNodeOp {
                         path: node_path.clone(),
                         action: if prev_mode.is_tree() {
@@ -542,16 +538,15 @@ impl Stage<'_> {
                             orig_mode = Some(mode);
                             orig_blob = Some(blob);
                         } else if node_action == svn::dump::NodeAction::Change {
-                            let (mode, blob) = self
-                                .tree_builder
+                            let (mode, blob) = tree_builder
                                 .ls(&node_path, self.git_import)?
                                 .ok_or_else(|| {
-                                tracing::error!(
-                                    "attempted to change non-existent path \"{}\"",
-                                    node_path.escape_ascii(),
-                                );
-                                ConvertError
-                            })?;
+                                    tracing::error!(
+                                        "attempted to change non-existent path \"{}\"",
+                                        node_path.escape_ascii(),
+                                    );
+                                    ConvertError
+                                })?;
                             orig_mode = Some(mode);
                             orig_blob = Some(blob);
                         }
@@ -659,7 +654,7 @@ impl Stage<'_> {
                                     }
                                 }
 
-                                file_blob_oid = self.tree_builder.mod_inline(
+                                file_blob_oid = tree_builder.mod_inline(
                                     &node_path,
                                     new_mode,
                                     blob_data,
@@ -703,7 +698,7 @@ impl Stage<'_> {
                                         ConvertError
                                     })?;
 
-                                file_blob_oid = self.tree_builder.mod_inline(
+                                file_blob_oid = tree_builder.mod_inline(
                                     &node_path,
                                     new_mode,
                                     blob_data,
@@ -712,12 +707,7 @@ impl Stage<'_> {
                                 )?;
                             }
                         } else if let Some(blob) = orig_blob {
-                            self.tree_builder.mod_oid(
-                                &node_path,
-                                new_mode,
-                                blob,
-                                self.git_import,
-                            )?;
+                            tree_builder.mod_oid(&node_path, new_mode, blob, self.git_import)?;
                             file_blob_oid = blob;
                         } else {
                             tracing::error!("missing file content in SVN dump node");
@@ -740,8 +730,7 @@ impl Stage<'_> {
                         if let Some(props) = props {
                             if node_action == svn::dump::NodeAction::Change {
                                 let meta_path = concat_path(&node_path, META_FILE_NAME);
-                                let (_, meta_blob_oid) = self
-                                    .tree_builder
+                                let (_, meta_blob_oid) = tree_builder
                                     .ls(&meta_path, self.git_import)?
                                     .ok_or_else(|| {
                                         tracing::error!(
@@ -825,7 +814,7 @@ impl Stage<'_> {
                                 );
                                 return Err(ConvertError);
                             }
-                            self.tree_builder.mod_oid(
+                            tree_builder.mod_oid(
                                 &node_path,
                                 copy_from_mode,
                                 copy_from_oid,
@@ -850,7 +839,7 @@ impl Stage<'_> {
                         if let Some(meta) = meta {
                             let raw_meta = meta.serialize();
                             let meta_path = concat_path(&node_path, META_FILE_NAME);
-                            self.tree_builder.mod_inline(
+                            tree_builder.mod_inline(
                                 &meta_path,
                                 gix_object::tree::EntryKind::Blob.into(),
                                 raw_meta,
@@ -876,7 +865,7 @@ impl Stage<'_> {
             }
         }
 
-        let meta_tree_oid = self.tree_builder.materialize(self.git_import)?;
+        let meta_tree_oid = tree_builder.materialize(self.git_import)?;
 
         Ok((meta, next_record, node_ops, meta_tree_oid))
     }
@@ -887,11 +876,11 @@ impl Stage<'_> {
         node_ops: &[RootNodeOp],
         meta_tree_oid: gix_hash::ObjectId,
     ) -> Result<gix_hash::ObjectId, ConvertError> {
-        if let Some(prev_rev_data) = self.root_rev_data.last() {
-            self.tree_builder.reset(prev_rev_data.files_tree_oid);
+        let mut tree_builder = if let Some(prev_rev_data) = self.root_rev_data.last() {
+            git_wrap::TreeBuilder::with_base(prev_rev_data.files_tree_oid)
         } else {
-            self.tree_builder.clear();
-        }
+            git_wrap::TreeBuilder::new()
+        };
 
         for (node_no, node_op) in node_ops.iter().enumerate() {
             self.progress_print.set_progress(format!(
@@ -911,21 +900,20 @@ impl Stage<'_> {
                         }
                     }
                     if do_delete {
-                        self.tree_builder.rm(&node_op.path, self.git_import)?;
+                        tree_builder.rm(&node_op.path, self.git_import)?;
                     }
                 }
-                RootNodeAction::ModFile(mode, blob) => match self
-                    .file_special_handling(&node_op.path)
-                {
-                    SpecialHandling::None => {
-                        self.tree_builder
-                            .mod_oid(&node_op.path, mode, blob, self.git_import)?;
+                RootNodeAction::ModFile(mode, blob) => {
+                    match self.file_special_handling(&node_op.path) {
+                        SpecialHandling::None => {
+                            tree_builder.mod_oid(&node_op.path, mode, blob, self.git_import)?;
+                        }
+                        SpecialHandling::Remove => {}
+                        SpecialHandling::CustomReplace => {}
                     }
-                    SpecialHandling::Remove => {}
-                    SpecialHandling::CustomReplace => {}
-                },
+                }
                 RootNodeAction::DelDir(_) => {
-                    self.tree_builder.rm(&node_op.path, self.git_import)?;
+                    tree_builder.rm(&node_op.path, self.git_import)?;
                 }
                 RootNodeAction::AddDir => {
                     update_dir_metadata = true;
@@ -943,7 +931,7 @@ impl Stage<'_> {
                             );
                             return Err(ConvertError);
                         }
-                        self.tree_builder.mod_oid(
+                        tree_builder.mod_oid(
                             &node_op.path,
                             copy_from_mode,
                             copy_from_oid,
@@ -982,9 +970,9 @@ impl Stage<'_> {
 
                     let gitignore_path = concat_path(&node_op.path, b".gitignore");
                     if gitignore_data.is_empty() {
-                        self.tree_builder.rm(&gitignore_path, self.git_import)?;
+                        tree_builder.rm(&gitignore_path, self.git_import)?;
                     } else {
-                        self.tree_builder.mod_inline(
+                        tree_builder.mod_inline(
                             &gitignore_path,
                             gix_object::tree::EntryKind::Blob.into(),
                             gitignore_data,
@@ -996,7 +984,7 @@ impl Stage<'_> {
             }
         }
 
-        let files_tree_oid = self.tree_builder.materialize(self.git_import)?;
+        let files_tree_oid = tree_builder.materialize(self.git_import)?;
 
         Ok(files_tree_oid)
     }
@@ -1267,11 +1255,11 @@ impl Stage<'_> {
         svn_rev: u32,
         ops: &[UnbranchedNodeOp],
     ) -> Result<(), ConvertError> {
-        if let Some(prev_rev_data) = self.unbranched_rev_data.last() {
-            self.tree_builder.reset(prev_rev_data.tree_oid);
+        let mut tree_builder = if let Some(prev_rev_data) = self.unbranched_rev_data.last() {
+            git_wrap::TreeBuilder::with_base(prev_rev_data.tree_oid)
         } else {
-            self.tree_builder.clear();
-        }
+            git_wrap::TreeBuilder::new()
+        };
 
         let root_rev = self.root_rev_data.len() - 1;
 
@@ -1293,7 +1281,7 @@ impl Stage<'_> {
                         }
                     }
                     if do_delete {
-                        self.tree_builder.rm(&op.path, self.git_import)?;
+                        tree_builder.rm(&op.path, self.git_import)?;
                     }
                 }
                 UnbranchedNodeAction::ModFile => match self.file_special_handling(&op.path) {
@@ -1308,14 +1296,13 @@ impl Stage<'_> {
                                 );
                                 ConvertError
                             })?;
-                        self.tree_builder
-                            .mod_oid(&op.path, mode, blob, self.git_import)?;
+                        tree_builder.mod_oid(&op.path, mode, blob, self.git_import)?;
                     }
                     SpecialHandling::Remove => {}
                     SpecialHandling::CustomReplace => {}
                 },
                 UnbranchedNodeAction::DelDir => {
-                    self.tree_builder.rm(&op.path, self.git_import)?;
+                    tree_builder.rm(&op.path, self.git_import)?;
                 }
                 UnbranchedNodeAction::AddDir => {
                     update_dir_metadata = true;
@@ -1333,7 +1320,7 @@ impl Stage<'_> {
                             );
                             return Err(ConvertError);
                         }
-                        self.tree_builder.mod_oid(
+                        tree_builder.mod_oid(
                             &op.path,
                             copy_from_mode,
                             copy_from_oid,
@@ -1354,10 +1341,9 @@ impl Stage<'_> {
                     .git_import
                     .ls(self.root_rev_data[root_rev].files_tree_oid, &gitignore_path)?
                 {
-                    self.tree_builder
-                        .mod_oid(&gitignore_path, mode, blob, self.git_import)?;
+                    tree_builder.mod_oid(&gitignore_path, mode, blob, self.git_import)?;
                 } else {
-                    self.tree_builder.rm(&gitignore_path, self.git_import)?;
+                    tree_builder.rm(&gitignore_path, self.git_import)?;
                 }
             }
         }
@@ -1366,7 +1352,7 @@ impl Stage<'_> {
             self.head_branch = Some(Head::Unbranched);
         }
 
-        let tree_oid = self.tree_builder.materialize(self.git_import)?;
+        let tree_oid = tree_builder.materialize(self.git_import)?;
         self.unbranched_rev_data
             .push(UnbranchedRevData { root_rev, tree_oid });
 
@@ -1564,14 +1550,14 @@ impl Stage<'_> {
                     tree_oid
                 } else {
                     let parent_tree_oid = self.branch_rev_data[parent_commit.unwrap()].tree_oid;
-                    self.tree_builder.reset(parent_tree_oid);
-                    self.tree_builder.mod_oid(
+                    let mut tree_builder = git_wrap::TreeBuilder::with_base(parent_tree_oid);
+                    tree_builder.mod_oid(
                         &branch_data.partial_sub_path,
                         mode,
                         tree_oid,
                         self.git_import,
                     )?;
-                    self.tree_builder.materialize(self.git_import)?
+                    tree_builder.materialize(self.git_import)?
                 }
             } else {
                 self.git_import.empty_tree_oid()
