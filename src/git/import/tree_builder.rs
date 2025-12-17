@@ -11,10 +11,7 @@ pub(crate) struct TreeBuilder {
 impl TreeBuilder {
     pub(crate) fn new() -> Self {
         Self {
-            root: TreeBuilderRoot::Tree {
-                tree: FHashMap::default(),
-                base_oid: None,
-            },
+            root: TreeBuilderRoot::Tree(TreeBuilderTree::empty()),
         }
     }
 
@@ -23,10 +20,7 @@ impl TreeBuilder {
     }
 
     pub(crate) fn clear(&mut self) {
-        self.root = TreeBuilderRoot::Tree {
-            tree: FHashMap::default(),
-            base_oid: None,
-        };
+        self.root = TreeBuilderRoot::Tree(TreeBuilderTree::empty());
     }
 
     pub(crate) fn mod_oid(
@@ -38,7 +32,9 @@ impl TreeBuilder {
     ) -> Result<(), ImportError> {
         let (entry_tree, entry_name) = self.find_entry(path, true, importer)?.unwrap();
 
-        entry_tree.insert(entry_name.to_vec(), TreeBuilderEntry::Entry(mode, oid));
+        entry_tree
+            .entries
+            .insert(entry_name.to_vec(), TreeBuilderEntry::Entry(mode, oid));
         Ok(())
     }
 
@@ -54,13 +50,15 @@ impl TreeBuilder {
 
         let blob_oid = importer.put_blob(blob, delta_base)?;
 
-        entry_tree.insert(entry_name.to_vec(), TreeBuilderEntry::Entry(mode, blob_oid));
+        entry_tree
+            .entries
+            .insert(entry_name.to_vec(), TreeBuilderEntry::Entry(mode, blob_oid));
         Ok(blob_oid)
     }
 
     pub(crate) fn rm(&mut self, path: &[u8], importer: &mut Importer) -> Result<bool, ImportError> {
         if let Some((entry_tree, entry_name)) = self.find_entry(path, false, importer)? {
-            Ok(entry_tree.remove(entry_name).is_some())
+            Ok(entry_tree.entries.remove(entry_name).is_some())
         } else {
             Ok(false)
         }
@@ -72,15 +70,11 @@ impl TreeBuilder {
         importer: &mut Importer,
     ) -> Result<Option<(EntryMode, ObjectId)>, ImportError> {
         if let Some((entry_tree, entry_name)) = self.find_entry(path, false, importer)? {
-            if let Some(entry) = entry_tree.get_mut(entry_name) {
+            if let Some(entry) = entry_tree.entries.get_mut(entry_name) {
                 match *entry {
                     TreeBuilderEntry::Entry(mode, oid) => Ok(Some((mode, oid))),
-                    TreeBuilderEntry::SubTree {
-                        tree: ref sub_tree,
-                        base_oid,
-                    } => {
-                        if let Some(oid) = Self::materialize_subtree(sub_tree, base_oid, importer)?
-                        {
+                    TreeBuilderEntry::SubTree(ref sub_tree) => {
+                        if let Some(oid) = Self::materialize_sub_tree(sub_tree, importer)? {
                             let mode = EntryKind::Tree.into();
                             *entry = TreeBuilderEntry::Entry(mode, oid);
                             Ok(Some((mode, oid)))
@@ -102,36 +96,30 @@ impl TreeBuilder {
         path: &'b [u8],
         create: bool,
         importer: &mut Importer,
-    ) -> Result<Option<(&'a mut FHashMap<Vec<u8>, TreeBuilderEntry>, &'b [u8])>, ImportError> {
+    ) -> Result<Option<(&'a mut TreeBuilderTree, &'b [u8])>, ImportError> {
         let mut comps = path.split(|&c| c == b'/');
         let last_comp = comps.next_back().unwrap();
 
         if let TreeBuilderRoot::Ext(tree_oid) = self.root {
-            self.root = TreeBuilderRoot::Tree {
-                tree: Self::read_tree(tree_oid, importer)?,
-                base_oid: Some(tree_oid),
-            };
+            self.root = TreeBuilderRoot::Tree(Self::read_tree(tree_oid, importer)?);
         }
 
         let mut cur_tree = match self.root {
-            TreeBuilderRoot::Tree { ref mut tree, .. } => tree,
+            TreeBuilderRoot::Tree(ref mut tree) => tree,
             TreeBuilderRoot::Ext(_) => unreachable!(),
         };
 
         for dir_comp in comps {
-            if cur_tree.contains_key(dir_comp) {
-                let entry = cur_tree.get_mut(dir_comp).unwrap();
+            if cur_tree.entries.contains_key(dir_comp) {
+                let entry = cur_tree.entries.get_mut(dir_comp).unwrap();
                 match *entry {
-                    TreeBuilderEntry::SubTree { ref mut tree, .. } => {
+                    TreeBuilderEntry::SubTree(ref mut tree) => {
                         cur_tree = tree;
                     }
                     TreeBuilderEntry::Entry(mode, oid) if mode.is_tree() => {
-                        *entry = TreeBuilderEntry::SubTree {
-                            tree: Self::read_tree(oid, importer)?,
-                            base_oid: Some(oid),
-                        };
+                        *entry = TreeBuilderEntry::SubTree(Self::read_tree(oid, importer)?);
                         cur_tree = match *entry {
-                            TreeBuilderEntry::SubTree { ref mut tree, .. } => tree,
+                            TreeBuilderEntry::SubTree(ref mut tree) => tree,
                             TreeBuilderEntry::Entry(..) => unreachable!(),
                         };
                     }
@@ -146,14 +134,12 @@ impl TreeBuilder {
                     }
                 }
             } else if create {
-                let entry = cur_tree.entry(dir_comp.to_vec()).or_insert_with(|| {
-                    TreeBuilderEntry::SubTree {
-                        tree: FHashMap::default(),
-                        base_oid: None,
-                    }
-                });
+                let entry = cur_tree
+                    .entries
+                    .entry(dir_comp.to_vec())
+                    .or_insert_with(|| TreeBuilderEntry::SubTree(TreeBuilderTree::empty()));
                 cur_tree = match *entry {
-                    TreeBuilderEntry::SubTree { ref mut tree, .. } => tree,
+                    TreeBuilderEntry::SubTree(ref mut tree) => tree,
                     TreeBuilderEntry::Entry(..) => unreachable!(),
                 };
             } else {
@@ -167,7 +153,7 @@ impl TreeBuilder {
     fn read_tree(
         tree_oid: ObjectId,
         importer: &mut Importer,
-    ) -> Result<FHashMap<Vec<u8>, TreeBuilderEntry>, ImportError> {
+    ) -> Result<TreeBuilderTree, ImportError> {
         let (obj_kind, raw_obj) = importer.get_raw(tree_oid)?;
         assert_eq!(
             obj_kind,
@@ -178,7 +164,7 @@ impl TreeBuilder {
             panic!("failed to parse object {tree_oid}");
         });
 
-        Ok(tree
+        let entries = tree
             .entries
             .into_iter()
             .map(|entry| {
@@ -187,21 +173,23 @@ impl TreeBuilder {
                     TreeBuilderEntry::Entry(entry.mode, entry.oid.into()),
                 )
             })
-            .collect())
+            .collect();
+
+        Ok(TreeBuilderTree {
+            base_oid: Some(tree_oid),
+            entries,
+        })
     }
 
     pub(crate) fn materialize(&mut self, importer: &mut Importer) -> Result<ObjectId, ImportError> {
         match self.root {
-            TreeBuilderRoot::Tree { ref tree, base_oid } => {
-                if let Some(tree_oid) = Self::materialize_subtree(tree, base_oid, importer)? {
+            TreeBuilderRoot::Tree(ref tree) => {
+                if let Some(tree_oid) = Self::materialize_sub_tree(tree, importer)? {
                     self.root = TreeBuilderRoot::Ext(tree_oid);
                     Ok(tree_oid)
                 } else {
                     let tree_oid = importer.put(gix_object::Tree { entries: vec![] }, None)?;
-                    self.root = TreeBuilderRoot::Tree {
-                        tree: FHashMap::default(),
-                        base_oid: None,
-                    };
+                    self.root = TreeBuilderRoot::Tree(TreeBuilderTree::empty());
                     Ok(tree_oid)
                 }
             }
@@ -209,21 +197,15 @@ impl TreeBuilder {
         }
     }
 
-    fn materialize_subtree(
-        sub_tree: &FHashMap<Vec<u8>, TreeBuilderEntry>,
-        base_oid: Option<ObjectId>,
+    fn materialize_sub_tree(
+        sub_tree: &TreeBuilderTree,
         importer: &mut Importer,
     ) -> Result<Option<ObjectId>, ImportError> {
         let mut entries = Vec::new();
-        for (k, v) in sub_tree.iter() {
+        for (k, v) in sub_tree.entries.iter() {
             match *v {
-                TreeBuilderEntry::SubTree {
-                    tree: ref sub_tree,
-                    base_oid,
-                } => {
-                    if let Some(sub_tree_oid) =
-                        Self::materialize_subtree(sub_tree, base_oid, importer)?
-                    {
+                TreeBuilderEntry::SubTree(ref sub_tree) => {
+                    if let Some(sub_tree_oid) = Self::materialize_sub_tree(sub_tree, importer)? {
                         entries.push(gix_object::tree::Entry {
                             mode: EntryKind::Tree.into(),
                             filename: k.as_slice().into(),
@@ -248,24 +230,32 @@ impl TreeBuilder {
         } else {
             entries.sort();
             importer
-                .put(gix_object::Tree { entries }, base_oid)
+                .put(gix_object::Tree { entries }, sub_tree.base_oid)
                 .map(Some)
         }
     }
 }
 
 enum TreeBuilderRoot {
-    Tree {
-        tree: FHashMap<Vec<u8>, TreeBuilderEntry>,
-        base_oid: Option<ObjectId>,
-    },
+    Tree(TreeBuilderTree),
     Ext(ObjectId),
 }
 
 enum TreeBuilderEntry {
-    SubTree {
-        tree: FHashMap<Vec<u8>, TreeBuilderEntry>,
-        base_oid: Option<ObjectId>,
-    },
+    SubTree(TreeBuilderTree),
     Entry(EntryMode, ObjectId),
+}
+
+struct TreeBuilderTree {
+    base_oid: Option<ObjectId>,
+    entries: FHashMap<Vec<u8>, TreeBuilderEntry>,
+}
+
+impl TreeBuilderTree {
+    fn empty() -> Self {
+        Self {
+            base_oid: None,
+            entries: FHashMap::default(),
+        }
+    }
 }
