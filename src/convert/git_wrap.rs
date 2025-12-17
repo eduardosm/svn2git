@@ -157,13 +157,13 @@ impl TreeBuilder {
             })
     }
 
-    pub(crate) fn ls(
+    pub(crate) fn ls_file(
         &mut self,
         path: &[u8],
         importer: &mut Importer,
     ) -> Result<Option<(gix_object::tree::EntryMode, gix_hash::ObjectId)>, ConvertError> {
         self.tree_builder
-            .ls(path, &mut importer.importer)
+            .ls_file(path, &mut importer.importer)
             .map_err(|e| {
                 tracing::error!("failed to ls \"{}\": {e}", path.escape_ascii());
                 ConvertError
