@@ -35,7 +35,7 @@ conv-params: |
   ]
   head = "branches1/b1"
   unbranched-name = "unbranched"
-  delete-files = ["**/delete_me"]
+  delete-files = ["delete_me"]
 
 git-revs:
   - rev: branches1/b1~0

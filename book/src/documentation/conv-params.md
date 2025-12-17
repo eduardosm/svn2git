@@ -149,14 +149,16 @@
 
 * `delete-files` (default: empty array)
 
-  Array of patterns that match paths of files that should be deleted.
+  Array of patterns that match names of files that should be deleted.
 
   <u>Example</u>
 
   ```toml
   delete-files = [
-    # Delete ".cvsignore" files (regardless of their location)
-    "**/.cvsignore",
+    # Delete ".cvsignore" files
+    ".cvsignore",
+    # Delete vim temporary files (.swo, .swp, .swn, ...)
+    "*.sw?",
   ]
   ```
 

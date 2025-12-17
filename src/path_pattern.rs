@@ -3,17 +3,19 @@ use regex_syntax::hir as regex_hir;
 #[derive(Debug)]
 pub(crate) enum ParseError {
     InvalidDoubleAsterisk,
+    UnallowedSlash,
 }
 
 impl std::fmt::Display for ParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::InvalidDoubleAsterisk => write!(f, "invalid '**'"),
+            Self::UnallowedSlash => write!(f, "unallowed '/'"),
         }
     }
 }
 
-fn pattern_to_hir(pattern: &str) -> Result<regex_hir::Hir, ParseError> {
+fn pattern_to_hir(pattern: &str, full_path: bool) -> Result<regex_hir::Hir, ParseError> {
     let mut hir = Vec::new();
     hir.push(regex_hir::Hir::look(regex_hir::Look::Start));
 
@@ -36,6 +38,9 @@ fn pattern_to_hir(pattern: &str) -> Result<regex_hir::Hir, ParseError> {
     let mut rem = pattern;
     while !rem.is_empty() {
         if rem == "**" {
+            if !full_path {
+                return Err(ParseError::InvalidDoubleAsterisk);
+            }
             // ".*"
             hir.push(regex_hir::Hir::repetition(regex_hir::Repetition {
                 min: 0,
@@ -45,6 +50,9 @@ fn pattern_to_hir(pattern: &str) -> Result<regex_hir::Hir, ParseError> {
             }));
             rem = "";
         } else if let Some(new_rem) = rem.strip_prefix("**/") {
+            if !full_path {
+                return Err(ParseError::InvalidDoubleAsterisk);
+            }
             // "([^/]*/)*"
             hir.push(regex_hir::Hir::repetition(regex_hir::Repetition {
                 min: 0,
@@ -61,6 +69,9 @@ fn pattern_to_hir(pattern: &str) -> Result<regex_hir::Hir, ParseError> {
             loop {
                 if let Some(&byte) = rem.as_bytes().get(i) {
                     if byte == b'/' {
+                        if !full_path {
+                            return Err(ParseError::UnallowedSlash);
+                        }
                         let (chunk, new_rem) = rem.split_at(i + 1);
                         hir.push(regex_hir::Hir::literal(chunk.as_bytes()));
                         rem = new_rem;
@@ -115,17 +126,18 @@ pub(crate) struct PathPattern {
 impl Default for PathPattern {
     fn default() -> Self {
         let empty: [&str; 0] = [];
-        Self::new(empty).unwrap()
+        Self::new(empty, false).unwrap()
     }
 }
 
 impl PathPattern {
     pub(crate) fn new<'a>(
         patterns: impl IntoIterator<Item = &'a str>,
+        full_path: bool,
     ) -> Result<Self, (&'a str, ParseError)> {
         let mut hirs = Vec::new();
         for pattern in patterns {
-            hirs.push(pattern_to_hir(pattern).map_err(|e| (pattern, e))?);
+            hirs.push(pattern_to_hir(pattern, full_path).map_err(|e| (pattern, e))?);
         }
 
         let regex = regex_automata::meta::Builder::new()
@@ -146,7 +158,42 @@ mod tests {
 
     #[test]
     fn test_pattern_1() {
-        let pattern = PathPattern::new(["**/foo/**/bar"]).unwrap();
+        let pattern = PathPattern::new(["*.foo"], false).unwrap();
+
+        assert!(pattern.is_match(b".foo"));
+        assert!(pattern.is_match(b"1.foo"));
+        assert!(pattern.is_match(b"2.foo"));
+        assert!(pattern.is_match(b"100.foo"));
+
+        assert!(!pattern.is_match(b"1.bar"));
+    }
+
+    #[test]
+    fn test_pattern_2() {
+        let pattern = PathPattern::new(["fo?"], false).unwrap();
+
+        assert!(pattern.is_match(b"foo"));
+        assert!(pattern.is_match(b"fo1"));
+        assert!(pattern.is_match(b"fo2"));
+
+        assert!(!pattern.is_match(b"boo"));
+        assert!(!pattern.is_match(b"fooo"));
+        assert!(!pattern.is_match(b"ffoo"));
+    }
+
+    #[test]
+    fn test_pattern_3() {
+        let pattern = PathPattern::new(["foo", "bar"], false).unwrap();
+
+        assert!(pattern.is_match(b"foo"));
+        assert!(pattern.is_match(b"bar"));
+
+        assert!(!pattern.is_match(b"foobar"));
+    }
+
+    #[test]
+    fn test_pattern_full_1() {
+        let pattern = PathPattern::new(["**/foo/**/bar"], true).unwrap();
 
         assert!(pattern.is_match(b"foo/bar"));
         assert!(pattern.is_match(b"a/foo/bar"));
@@ -163,8 +210,8 @@ mod tests {
     }
 
     #[test]
-    fn test_pattern_2() {
-        let pattern = PathPattern::new(["foo"]).unwrap();
+    fn test_pattern_full_2() {
+        let pattern = PathPattern::new(["foo"], true).unwrap();
 
         assert!(pattern.is_match(b"foo"));
 
@@ -175,34 +222,38 @@ mod tests {
     }
 
     #[test]
-    fn test_pattern_3() {
-        let pattern = PathPattern::new(["fo?"]).unwrap();
+    fn test_pattern_full_3() {
+        let pattern = PathPattern::new(["fo?"], true).unwrap();
 
         assert!(pattern.is_match(b"foo"));
         assert!(pattern.is_match(b"fo1"));
         assert!(pattern.is_match(b"fo2"));
 
+        assert!(!pattern.is_match(b"boo"));
+        assert!(!pattern.is_match(b"fooo"));
+        assert!(!pattern.is_match(b"ffoo"));
         assert!(!pattern.is_match(b"foo/1"));
         assert!(!pattern.is_match(b"fo/"));
     }
 
     #[test]
-    fn test_pattern_4() {
-        let pattern = PathPattern::new(["*.foo"]).unwrap();
+    fn test_pattern_full_4() {
+        let pattern = PathPattern::new(["*.foo"], true).unwrap();
 
         assert!(pattern.is_match(b".foo"));
         assert!(pattern.is_match(b"1.foo"));
         assert!(pattern.is_match(b"2.foo"));
         assert!(pattern.is_match(b"100.foo"));
 
+        assert!(!pattern.is_match(b"1.bar"));
         assert!(!pattern.is_match(b"/.foo"));
         assert!(!pattern.is_match(b"/1.foo"));
         assert!(!pattern.is_match(b"1/2.foo"));
     }
 
     #[test]
-    fn test_pattern_5() {
-        let pattern = PathPattern::new(["foo", "bar"]).unwrap();
+    fn test_pattern_full_5() {
+        let pattern = PathPattern::new(["foo", "bar"], true).unwrap();
 
         assert!(pattern.is_match(b"foo"));
         assert!(pattern.is_match(b"bar"));

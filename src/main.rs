@@ -80,21 +80,19 @@ fn main_inner() -> Result<(), RunError> {
         RunError::Generic
     })?;
 
-    let merge_optional = path_pattern::PathPattern::new(
-        params.merge_optional.iter().map(String::as_str),
-    )
-    .map_err(|(pat, e)| {
-        tracing::error!("invalid pattern {pat:?}: {e}");
-        RunError::Generic
-    })?;
+    let merge_optional =
+        path_pattern::PathPattern::new(params.merge_optional.iter().map(String::as_str), true)
+            .map_err(|(pat, e)| {
+                tracing::error!("invalid pattern {pat:?}: {e}");
+                RunError::Generic
+            })?;
 
-    let delete_files = path_pattern::PathPattern::new(
-        params.delete_files.iter().map(String::as_str),
-    )
-    .map_err(|(pat, e)| {
-        tracing::error!("invalid pattern {pat:?}: {e}");
-        RunError::Generic
-    })?;
+    let delete_files =
+        path_pattern::PathPattern::new(params.delete_files.iter().map(String::as_str), false)
+            .map_err(|(pat, e)| {
+                tracing::error!("invalid pattern {pat:?}: {e}");
+                RunError::Generic
+            })?;
 
     let mut options = convert::Options::new(convert::InitOptions {
         keep_deleted_branches: params.keep_deleted_branches,
