@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.0 (unreleased)
+
+### Breaking
+
+- The `delete-files` option now matches file names instead of full paths.
+
+### Fixed
+
+- Files and directories named `.svn` are now allowed to appear in the Subversion
+  repository.
+
+### Other
+
+- MSRV has been bumped to 1.85.
+
 ## 0.3.0 (2025-06-22)
 
 ### Breaking
