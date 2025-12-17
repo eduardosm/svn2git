@@ -47,7 +47,7 @@ svn-revs:
 
 conv-params: |
   branches = ["trunk"]
-  delete-files = ["**/y"]
+  delete-files = ["y"]
 
 git-revs:
   - rev: trunk~3

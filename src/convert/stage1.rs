@@ -256,19 +256,17 @@ impl Stage<'_> {
     }
 
     fn file_special_handling(&self, path: &[u8]) -> SpecialHandling {
-        if self.options.delete_files.is_match(path) {
-            SpecialHandling::Remove
-        } else {
-            let last_component = path
-                .iter()
-                .rposition(|&c| c == b'/')
-                .map_or(path, |i| &path[(i + 1)..]);
+        let last_component = path
+            .iter()
+            .rposition(|&c| c == b'/')
+            .map_or(path, |i| &path[(i + 1)..]);
 
-            if self.options.generate_gitignore && last_component == b".gitignore" {
-                SpecialHandling::CustomReplace
-            } else {
-                SpecialHandling::None
-            }
+        if self.options.delete_files.is_match(last_component) {
+            SpecialHandling::Remove
+        } else if self.options.generate_gitignore && last_component == b".gitignore" {
+            SpecialHandling::CustomReplace
+        } else {
+            SpecialHandling::None
         }
     }
 
