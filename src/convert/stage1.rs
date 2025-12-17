@@ -462,7 +462,7 @@ impl Stage<'_> {
 
             if node_action == svn::dump::NodeAction::Replace {
                 let (prev_mode, prev_hash) = tree_builder
-                    .ls(&node_path, self.git_import)?
+                    .rm(&node_path, self.git_import)?
                     .ok_or_else(|| {
                         tracing::error!(
                             "attempted to replace non-existent path \"{}\"",
@@ -470,8 +470,6 @@ impl Stage<'_> {
                         );
                         ConvertError
                     })?;
-
-                tree_builder.rm(&node_path, self.git_import)?;
                 node_ops.push(RootNodeOp {
                     path: node_path.clone(),
                     action: if prev_mode.is_tree() {
@@ -485,7 +483,7 @@ impl Stage<'_> {
             match node_action {
                 svn::dump::NodeAction::Delete => {
                     let (prev_mode, prev_hash) = tree_builder
-                        .ls(&node_path, self.git_import)?
+                        .rm(&node_path, self.git_import)?
                         .ok_or_else(|| {
                             tracing::error!(
                                 "attempted to delete non-existent path \"{}\"",
@@ -493,8 +491,6 @@ impl Stage<'_> {
                             );
                             ConvertError
                         })?;
-
-                    tree_builder.rm(&node_path, self.git_import)?;
                     node_ops.push(RootNodeOp {
                         path: node_path.clone(),
                         action: if prev_mode.is_tree() {
