@@ -8,8 +8,9 @@
 
 ### Fixed
 
-- Files and directories named `.svn` are now allowed to appear in the Subversion
-  repository.
+- Files and directories named `.svn` and `.git` are now allowed to appear in the
+  Subversion repository. Note that those named `.git` will not be included in the
+  resulting Git repository.
 
 ### Other
 

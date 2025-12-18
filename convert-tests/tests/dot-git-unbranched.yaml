@@ -1,0 +1,91 @@
+svn-revs:
+  - props:
+      svn:log: first commit
+    nodes:
+      - path: x
+        kind: file
+        action: add
+        text: "file x\n"
+      - path: .git
+        kind: file
+        action: add
+        text: "file .git\n"
+  - props:
+      svn:log: delete .git
+    nodes:
+      - path: .git
+        kind: file
+        action: delete
+  - props:
+      svn:log: replace .git with directory
+    nodes:
+      - path: x
+        kind: file
+        action: add
+        text: "file x\n"
+      - path: .git
+        kind: dir
+        action: add
+      - path: .git/y
+        kind: file
+        action: add
+        text: "file y\n"
+  - props:
+      svn:log: copy .git directory
+    nodes:
+      - path: dot-git-copy
+        kind: dir
+        action: add
+        copy-from-path: .git
+  - props:
+      svn:log: change both y
+    nodes:
+      - path: .git/y
+        kind: file
+        action: change
+        text: "modified file y 1\n"
+      - path: dot-git-copy/y
+        kind: file
+        action: change
+        text: "modified file y 2\n"
+
+conv-params: |
+  head = ""
+  unbranched-name = "unbranched"
+
+git-revs:
+  - rev: unbranched~4
+    tree:
+      x:
+        type: normal
+        data: "file x\n"
+  - rev: unbranched~3
+    tree:
+      x:
+        type: normal
+        data: "file x\n"
+  - rev: unbranched~2
+    tree:
+      x:
+        type: normal
+        data: "file x\n"
+  - rev: unbranched~1
+    tree:
+      x:
+        type: normal
+        data: "file x\n"
+      dot-git-copy:
+        type: dir
+      dot-git-copy/y:
+        type: normal
+        data: "file y\n"
+  - rev: unbranched~0
+    tree:
+      x:
+        type: normal
+        data: "file x\n"
+      dot-git-copy:
+        type: dir
+      dot-git-copy/y:
+        type: normal
+        data: "modified file y 2\n"
