@@ -1,7 +1,7 @@
 mod delta;
 mod import;
 
-pub(crate) use import::{ImportFinishProgress, Importer, TreeBuilder};
+pub(crate) use import::{ChangeSet, ImportFinishProgress, Importer};
 
 pub(crate) fn legalize_branch_name(raw_name: &[u8]) -> String {
     fn legalize_component(name: &mut String) {

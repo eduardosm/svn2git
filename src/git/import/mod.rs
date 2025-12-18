@@ -7,11 +7,11 @@ use gix_object::{Object, ObjectRef};
 
 use crate::{FHashMap, FHashSet};
 
+mod change_set;
 mod temp_storage;
 mod temp_storage_thread;
-mod tree_builder;
 
-pub(crate) use tree_builder::TreeBuilder;
+pub(crate) use change_set::ChangeSet;
 
 #[derive(Debug)]
 pub(crate) enum ImportError {
@@ -43,9 +43,6 @@ pub(crate) enum ImportError {
         source_path: std::path::PathBuf,
         dest_path: std::path::PathBuf,
         error: std::io::Error,
-    },
-    ParentPathIsNotDir {
-        path: Vec<u8>,
     },
 }
 
@@ -98,13 +95,6 @@ impl std::fmt::Display for ImportError {
                 write!(
                     f,
                     "failed to rename {source_path:?} to {dest_path:?}: {error}"
-                )
-            }
-            Self::ParentPathIsNotDir { ref path } => {
-                write!(
-                    f,
-                    "parent path of \"{}\" is not a directory",
-                    path.escape_ascii(),
                 )
             }
         }

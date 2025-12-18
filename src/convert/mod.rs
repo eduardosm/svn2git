@@ -6,6 +6,7 @@ mod meta;
 mod options;
 mod stage1;
 mod stage2;
+mod tree_builder;
 
 pub(crate) use options::{InitOptions, Options};
 

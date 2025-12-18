@@ -17,6 +17,11 @@ impl Importer {
         Ok(Self { importer })
     }
 
+    #[inline]
+    pub(super) fn inner(&mut self) -> &mut git::Importer {
+        &mut self.importer
+    }
+
     pub(super) fn abort(self) {
         self.importer.abort();
     }
@@ -43,6 +48,27 @@ impl Importer {
     ) -> Result<gix_hash::ObjectId, ConvertError> {
         self.importer.put(object, delta_base).map_err(|e| {
             tracing::error!("failed to put object: {e}");
+            ConvertError
+        })
+    }
+
+    pub(crate) fn put_blob(
+        &mut self,
+        data: Vec<u8>,
+        delta_base: Option<gix_hash::ObjectId>,
+    ) -> Result<gix_hash::ObjectId, ConvertError> {
+        self.importer.put_blob(data, delta_base).map_err(|e| {
+            tracing::error!("failed to put object: {e}");
+            ConvertError
+        })
+    }
+
+    pub(crate) fn get_raw(
+        &self,
+        id: gix_hash::ObjectId,
+    ) -> Result<(gix_object::Kind, Vec<u8>), ConvertError> {
+        self.importer.get_raw(id).map_err(|e| {
+            tracing::error!("failed to get object {id}: {e}");
             ConvertError
         })
     }
@@ -84,98 +110,5 @@ impl Importer {
 
     pub(super) fn set_ref(&mut self, ref_name: &str, commit_oid: gix_hash::ObjectId) {
         self.importer.set_ref(ref_name, commit_oid);
-    }
-}
-
-pub(super) struct TreeBuilder {
-    tree_builder: git::TreeBuilder,
-}
-
-impl TreeBuilder {
-    pub(super) fn new() -> Self {
-        Self {
-            tree_builder: git::TreeBuilder::new(),
-        }
-    }
-
-    pub(crate) fn with_base(base: gix_hash::ObjectId) -> Self {
-        Self {
-            tree_builder: git::TreeBuilder::with_base(base),
-        }
-    }
-
-    pub(super) fn mod_oid(
-        &mut self,
-        path: &[u8],
-        mode: gix_object::tree::EntryMode,
-        oid: gix_hash::ObjectId,
-        importer: &mut Importer,
-    ) -> Result<(), ConvertError> {
-        self.tree_builder
-            .mod_oid(path, mode, oid, &mut importer.importer)
-            .map_err(|e| {
-                tracing::error!(
-                    "failed to set tree entry at \"{}\": {e}",
-                    path.escape_ascii(),
-                );
-                ConvertError
-            })
-    }
-
-    pub(super) fn mod_inline(
-        &mut self,
-        path: &[u8],
-        mode: gix_object::tree::EntryMode,
-        blob: Vec<u8>,
-        delta_base: Option<gix_hash::ObjectId>,
-        importer: &mut Importer,
-    ) -> Result<gix_hash::ObjectId, ConvertError> {
-        self.tree_builder
-            .mod_inline(path, mode, blob, delta_base, &mut importer.importer)
-            .map_err(|e| {
-                tracing::error!(
-                    "failed to set tree entry at \"{}\": {e}",
-                    path.escape_ascii(),
-                );
-                ConvertError
-            })
-    }
-
-    pub(super) fn rm(
-        &mut self,
-        path: &[u8],
-        importer: &mut Importer,
-    ) -> Result<Option<(gix_object::tree::EntryMode, gix_hash::ObjectId)>, ConvertError> {
-        self.tree_builder
-            .rm(path, &mut importer.importer)
-            .map_err(|e| {
-                tracing::error!(
-                    "failed to remove tree entry at \"{}\": {e}",
-                    path.escape_ascii(),
-                );
-                ConvertError
-            })
-    }
-
-    pub(crate) fn ls_file(
-        &mut self,
-        path: &[u8],
-        importer: &mut Importer,
-    ) -> Result<Option<(gix_object::tree::EntryMode, gix_hash::ObjectId)>, ConvertError> {
-        self.tree_builder
-            .ls_file(path, &mut importer.importer)
-            .map_err(|e| {
-                tracing::error!("failed to ls \"{}\": {e}", path.escape_ascii());
-                ConvertError
-            })
-    }
-
-    pub(super) fn build(self, importer: &mut Importer) -> Result<gix_hash::ObjectId, ConvertError> {
-        self.tree_builder
-            .build(&mut importer.importer)
-            .map_err(|e| {
-                tracing::error!("failed to materialize tree: {e}");
-                ConvertError
-            })
     }
 }
