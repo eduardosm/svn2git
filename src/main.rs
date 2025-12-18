@@ -223,7 +223,7 @@ fn main_inner() -> Result<(), RunError> {
            [[SVN path: {{ svn_path }}]]
         "#});
 
-    let meta_maker = make_meta::GitMetaMaker::new(
+    let metadata_maker = make_meta::GitMetadataMaker::new(
         &user_map,
         user_fallback_template,
         commit_msg_template,
@@ -237,7 +237,7 @@ fn main_inner() -> Result<(), RunError> {
     let r = convert::convert(
         &progress_print,
         &options,
-        &meta_maker,
+        &metadata_maker,
         &args.src,
         &args.dest,
     );
