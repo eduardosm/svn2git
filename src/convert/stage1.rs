@@ -495,8 +495,7 @@ impl Stage<'_> {
                         return Err(ConvertError);
                     }
                     Some(svn::dump::NodeKind::File) => {
-                        let mut orig_mode = None;
-                        let mut orig_blob = None;
+                        let mut orig_entry = None;
 
                         if let Some((copy_from_rev, copy_from_path)) = copy_from.take() {
                             if node_action == svn::dump::NodeAction::Change {
@@ -504,7 +503,7 @@ impl Stage<'_> {
                                 return Err(ConvertError);
                             }
 
-                            let (mode, blob) = self
+                            let (mode, oid) = self
                                 .git_import
                                 .ls(
                                     self.root_rev_data[copy_from_rev].svn_tree_oid,
@@ -518,20 +517,18 @@ impl Stage<'_> {
                                     );
                                     ConvertError
                                 })?;
-                            orig_mode = Some(mode);
-                            orig_blob = Some(blob);
+                            orig_entry = Some((mode, oid));
                         } else if node_action == svn::dump::NodeAction::Change {
-                            let (mode, blob) = tree_builder
+                            let (mode, oid) = tree_builder
                                 .ls_file(&node_path, self.git_import)?
                                 .ok_or_else(|| {
-                                tracing::error!(
-                                    "attempted to change directory or non-existent path \"{}\"",
-                                    node_path.escape_ascii(),
-                                );
-                                ConvertError
-                            })?;
-                            orig_mode = Some(mode);
-                            orig_blob = Some(blob);
+                                    tracing::error!(
+                                        "attempted to change directory or non-existent path \"{}\"",
+                                        node_path.escape_ascii(),
+                                    );
+                                    ConvertError
+                                })?;
+                            orig_entry = Some((mode, oid));
                         }
 
                         let mut props_mode = None::<gix_object::tree::EntryMode>;
@@ -546,14 +543,18 @@ impl Stage<'_> {
                                     props_mode = Some(gix_object::tree::EntryKind::Link.into());
                                 }
                                 (Some(None), _) => {
-                                    // "svn:special" removed, which is not allowed
-                                    tracing::error!("unexpected change of symlink/non-symlink");
+                                    // "svn:special" removed, which is not supported
+                                    tracing::error!(
+                                        "removal of \"svn:special\" property is not supported"
+                                    );
                                     return Err(ConvertError);
                                 }
                                 (None, Some(Some(_))) => {
                                     // "svn:executable" added
                                     // In delta mode, "svn:special" might be present
-                                    if !props.is_delta || !orig_mode.is_some_and(|m| m.is_link()) {
+                                    if !props.is_delta
+                                        || !orig_entry.is_some_and(|(m, _)| m.is_link())
+                                    {
                                         props_mode = Some(
                                             gix_object::tree::EntryKind::BlobExecutable.into(),
                                         );
@@ -562,7 +563,9 @@ impl Stage<'_> {
                                 (None, Some(None)) => {
                                     // "svn:executable" removed
                                     // In delta mode, "svn:special" might be present
-                                    if props.is_delta && orig_mode.is_some_and(|m| m.is_link()) {
+                                    if props.is_delta
+                                        && orig_entry.is_some_and(|(m, _)| m.is_link())
+                                    {
                                         // "svn:special" is present
                                         // keep `orig_mode`
                                     } else {
@@ -583,20 +586,22 @@ impl Stage<'_> {
                         }
 
                         let new_mode = props_mode
-                            .or(orig_mode)
+                            .or(orig_entry.map(|(m, _)| m))
                             .unwrap_or(gix_object::tree::EntryKind::Blob.into());
-                        if let Some(orig_mode) = orig_mode {
-                            if new_mode.is_link() != orig_mode.is_link() {
-                                tracing::error!("unexpected change of symlink/non-symlink");
+                        if let Some((orig_mode, _)) = orig_entry {
+                            if orig_mode.is_link() && !new_mode.is_link() {
+                                tracing::error!(
+                                    "removal of \"svn:special\" property is not supported"
+                                );
                                 return Err(ConvertError);
                             }
                         }
 
                         if let Some(node_text) = node_record.text.take() {
                             if node_text.is_delta {
-                                let source = if let Some(orig_blob) = orig_blob {
-                                    let mut source = self.git_import.get_blob(orig_blob)?;
-                                    if new_mode.is_link() {
+                                let source = if let Some((orig_mode, orig_oid)) = orig_entry {
+                                    let mut source = self.git_import.get_blob(orig_oid)?;
+                                    if orig_mode.is_link() {
                                         source.splice(0..0, b"link ".iter().copied());
                                     }
                                     source
@@ -640,7 +645,7 @@ impl Stage<'_> {
                                     &node_path,
                                     new_mode,
                                     blob_data,
-                                    orig_blob,
+                                    orig_entry.map(|(_, orig_blob)| orig_blob),
                                     self.git_import,
                                 )?;
                             } else {
@@ -684,12 +689,27 @@ impl Stage<'_> {
                                     &node_path,
                                     new_mode,
                                     blob_data,
-                                    orig_blob,
+                                    orig_entry.map(|(_, orig_blob)| orig_blob),
                                     self.git_import,
                                 )?;
                             }
-                        } else if let Some(blob) = orig_blob {
-                            tree_builder.mod_oid(&node_path, new_mode, blob, self.git_import)?;
+                        } else if let Some((orig_mode, orig_oid)) = orig_entry {
+                            let oid = if !orig_mode.is_link() && new_mode.is_link() {
+                                let mut orig_data = self.git_import.get_blob(orig_oid)?;
+                                if !orig_data.starts_with(b"link ") {
+                                    // strip the "link " prefix in symlinks
+                                    tracing::error!(
+                                        "invalid symlink at \"{}\" in SVN dump",
+                                        node_path.escape_ascii(),
+                                    );
+                                    return Err(ConvertError);
+                                }
+                                orig_data.splice(0..5, []);
+                                self.git_import.put_blob(orig_data, None)?
+                            } else {
+                                orig_oid
+                            };
+                            tree_builder.mod_oid(&node_path, new_mode, oid, self.git_import)?;
                         } else {
                             tracing::error!("missing file content in SVN dump node");
                             return Err(ConvertError);

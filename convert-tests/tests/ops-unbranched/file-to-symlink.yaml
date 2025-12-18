@@ -45,34 +45,60 @@ svn-revs:
         props:
           svn:special: "*"
         text: "link target3"
+  - props:
+      svn:log: replace symlink with fake symlink
+    nodes:
+      - path: x
+        kind: file
+        action: replace
+        # Without prop section
+        text: "link target4"
+  - props:
+      svn:log: convert fake symlink to symlink
+    nodes:
+      - path: x
+        kind: file
+        action: change
+        props:
+          svn:special: "*"
 
 conv-params: |
   head = ""
   unbranched-name = "unbranched"
 
 git-revs:
-  - rev: unbranched~4
+  - rev: unbranched~6
     tree:
       x:
         type: symlink
         target: target1
-  - rev: unbranched~3
+  - rev: unbranched~5
     tree:
       x:
         type: normal
         data: "x\n"
-  - rev: unbranched~2
+  - rev: unbranched~4
     tree:
       x:
         type: symlink
         target: target2
-  - rev: unbranched~1
+  - rev: unbranched~3
     tree:
       x:
         type: normal
         data: "y\n"
-  - rev: unbranched~0
+  - rev: unbranched~2
     tree:
       x:
         type: symlink
         target: target3
+  - rev: unbranched~1
+    tree:
+      x:
+        type: normal
+        data: "link target4"
+  - rev: unbranched~0
+    tree:
+      x:
+        type: symlink
+        target: target4
