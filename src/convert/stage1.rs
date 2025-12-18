@@ -1,7 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use super::options::{DirClass, Options};
-use super::{ConvertError, git_wrap, meta};
+use super::tree_builder::METADATA_FILE_NAME;
+use super::{ConvertError, git_wrap, meta, tree_builder};
 use crate::term_out::ProgressPrint;
 use crate::{FHashMap, svn};
 
@@ -45,6 +46,7 @@ pub(super) fn run(
         svn_uuid: None,
         root_rev_data: Vec::new(),
         svn_rev_map: FHashMap::default(),
+        tree_map: FHashMap::default(),
         unbranched_rev_data: Vec::new(),
         branch_data: Vec::new(),
         branch_rev_data: Vec::new(),
@@ -63,8 +65,6 @@ pub(super) fn run(
     Ok(r)
 }
 
-const METADATA_FILE_NAME: &[u8] = b".";
-
 #[derive(Clone, Debug)]
 struct RootNodeOp {
     path: Vec<u8>,
@@ -74,7 +74,7 @@ struct RootNodeOp {
 #[derive(Clone, Debug)]
 enum RootNodeAction {
     DelFile,
-    ModFile(gix_object::tree::EntryMode, gix_hash::ObjectId),
+    ModFile,
     DelDir(gix_hash::ObjectId),
     AddDir,
     CopyDir(bool, usize, Vec<u8>),
@@ -132,6 +132,7 @@ struct Stage<'a> {
     svn_uuid: Option<uuid::Uuid>,
     root_rev_data: Vec<RootCommitData>,
     svn_rev_map: FHashMap<u32, usize>,
+    tree_map: FHashMap<gix_hash::ObjectId, Option<gix_hash::ObjectId>>,
     unbranched_rev_data: Vec<UnbranchedRevData>,
     branch_data: Vec<BranchData>,
     branch_rev_data: Vec<BranchRevData>,
@@ -145,7 +146,6 @@ pub(super) struct RootCommitData {
     pub(super) svn_rev: u32,
     pub(super) svn_rev_props: FHashMap<Vec<u8>, Vec<u8>>,
     pub(super) svn_tree_oid: gix_hash::ObjectId,
-    pub(super) git_tree_oid: gix_hash::ObjectId,
 }
 
 pub(super) struct UnbranchedRevData {
@@ -255,15 +255,10 @@ impl Stage<'_> {
         Ok(result)
     }
 
-    fn file_special_handling(&self, path: &[u8]) -> SpecialHandling {
-        let last_component = path
-            .iter()
-            .rposition(|&c| c == b'/')
-            .map_or(path, |i| &path[(i + 1)..]);
-
-        if self.options.delete_files.is_match(last_component) {
+    fn file_special_handling(options: &Options, file_name: &[u8]) -> SpecialHandling {
+        if options.delete_files.is_match(file_name) {
             SpecialHandling::Remove
-        } else if self.options.generate_gitignore && last_component == b".gitignore" {
+        } else if options.generate_gitignore && file_name == b".gitignore" {
             SpecialHandling::CustomReplace
         } else {
             SpecialHandling::None
@@ -350,8 +345,6 @@ impl Stage<'_> {
 
         let (svn_rev_props, next_record, root_node_ops, root_svn_tree_oid) =
             self.read_svn_rev_tree(rev_record)?;
-        let root_git_tree_oid =
-            self.make_root_git_tree(svn_rev, &root_node_ops, root_svn_tree_oid)?;
 
         self.progress_print.set_progress(format!(
             "importing SVN revision {svn_rev} - splitting branches",
@@ -364,7 +357,6 @@ impl Stage<'_> {
             svn_rev,
             svn_rev_props,
             svn_tree_oid: root_svn_tree_oid,
-            git_tree_oid: root_git_tree_oid,
         });
 
         if !unbranched_ops.is_empty() {
@@ -397,9 +389,11 @@ impl Stage<'_> {
         ConvertError,
     > {
         let mut tree_builder = if let Some(prev_rev_data) = self.root_rev_data.last() {
-            git_wrap::TreeBuilder::with_base(prev_rev_data.svn_tree_oid)
+            tree_builder::TreeBuilder::with_base(prev_rev_data.svn_tree_oid)
         } else {
-            git_wrap::TreeBuilder::new()
+            let metadata = meta::DirMetadata::default();
+            let metadata_oid = self.git_import.put_blob(metadata.serialize(), None)?;
+            tree_builder::TreeBuilder::new(metadata_oid)
         };
 
         let svn_rev = rev_record.rev_no;
@@ -407,17 +401,6 @@ impl Stage<'_> {
 
         let svn_rev_props = rev_record.properties.unwrap_or_default();
         let mut node_ops = Vec::new();
-
-        if self.root_rev_data.is_empty() {
-            let metadata = meta::DirMetadata::default();
-            tree_builder.mod_inline(
-                METADATA_FILE_NAME,
-                gix_object::tree::EntryKind::Blob.into(),
-                metadata.serialize(),
-                None,
-                self.git_import,
-            )?;
-        }
 
         let mut next_record = None;
         let mut node_no = 0usize;
@@ -603,7 +586,6 @@ impl Stage<'_> {
                             }
                         }
 
-                        let file_blob_oid;
                         if let Some(node_text) = node_record.text.take() {
                             if node_text.is_delta {
                                 let source = if let Some(orig_blob) = orig_blob {
@@ -648,7 +630,7 @@ impl Stage<'_> {
                                     }
                                 }
 
-                                file_blob_oid = tree_builder.mod_inline(
+                                tree_builder.mod_inline(
                                     &node_path,
                                     new_mode,
                                     blob_data,
@@ -692,7 +674,7 @@ impl Stage<'_> {
                                         ConvertError
                                     })?;
 
-                                file_blob_oid = tree_builder.mod_inline(
+                                tree_builder.mod_inline(
                                     &node_path,
                                     new_mode,
                                     blob_data,
@@ -702,7 +684,6 @@ impl Stage<'_> {
                             }
                         } else if let Some(blob) = orig_blob {
                             tree_builder.mod_oid(&node_path, new_mode, blob, self.git_import)?;
-                            file_blob_oid = blob;
                         } else {
                             tracing::error!("missing file content in SVN dump node");
                             return Err(ConvertError);
@@ -710,41 +691,35 @@ impl Stage<'_> {
 
                         node_ops.push(RootNodeOp {
                             path: node_path.clone(),
-                            action: RootNodeAction::ModFile(new_mode, file_blob_oid),
+                            action: RootNodeAction::ModFile,
                         });
                     }
                     Some(svn::dump::NodeKind::Dir) => {
-                        let is_empty_new =
-                            node_action != svn::dump::NodeAction::Change && copy_from.is_none();
-                        let mut prev_metadata_oid = None;
-
+                        let mut metadata_oid = None;
                         let props = props.take();
-
-                        let mut metadata = None;
                         if let Some(props) = props {
+                            let mut prev_metadata_oid = None;
                             if node_action == svn::dump::NodeAction::Change {
-                                let metadata_path = concat_path(&node_path, METADATA_FILE_NAME);
-                                let (_, metadata_oid) = tree_builder
-                                    .ls_file(&metadata_path, self.git_import)?
+                                let metadata_oid = tree_builder
+                                    .ls_metadata(&node_path, self.git_import)?
                                     .ok_or_else(|| {
                                         tracing::error!(
-                                            "missing directory metadata for \"{}\"",
+                                            "attempted to change non-existent directory \"{}\"",
                                             node_path.escape_ascii(),
                                         );
                                         ConvertError
                                     })?;
                                 prev_metadata_oid = Some(metadata_oid);
                             } else if let Some((copy_from_rev, ref copy_from_path)) = copy_from {
-                                let metadata_path = concat_path(copy_from_path, METADATA_FILE_NAME);
                                 let (_, metadata_oid) = self
                                     .git_import
                                     .ls(
                                         self.root_rev_data[copy_from_rev].svn_tree_oid,
-                                        &metadata_path,
+                                        &concat_path(copy_from_path, METADATA_FILE_NAME),
                                     )?
                                     .ok_or_else(|| {
                                         tracing::error!(
-                                            "missing directory metadata for copy-from directory \"{}\" at rev {}",
+                                            "attempted to copy from non-existent directory \"{}\" at rev {}",
                                             copy_from_path.escape_ascii(),
                                             self.root_rev_data[copy_from_rev].svn_rev,
                                         );
@@ -771,21 +746,29 @@ impl Stage<'_> {
                                 );
                             }
 
-                            metadata = Some(meta::DirMetadata::from_props(
-                                &props.properties,
-                                prev_metadata,
-                            ));
-                        } else if is_empty_new {
-                            metadata = Some(meta::DirMetadata::default());
+                            let metadata =
+                                meta::DirMetadata::from_props(&props.properties, prev_metadata);
+                            metadata_oid = Some(
+                                self.git_import
+                                    .put_blob(metadata.serialize(), prev_metadata_oid)?,
+                            );
                         } else {
-                            // preserve metadata from existing or copied directory
-                            // (keep `metadata` as `None`)
+                            // Keep `metadata_oid` as `None`:
+                            //  * Preserve metadata from existing or copied directory
+                            //  * Use empty metadata for new directory
                         }
 
                         if node_action == svn::dump::NodeAction::Change {
+                            if let Some(metadata_oid) = metadata_oid {
+                                tree_builder.mod_metadata(
+                                    &node_path,
+                                    metadata_oid,
+                                    self.git_import,
+                                )?;
+                            }
                             node_ops.push(RootNodeOp {
                                 path: node_path.clone(),
-                                action: RootNodeAction::ModDir(metadata.is_some()),
+                                action: RootNodeAction::ModDir(metadata_oid.is_some()),
                             });
                         } else if let Some((copy_from_rev, copy_from_path)) = copy_from.take() {
                             let (copy_from_mode, copy_from_oid) = self
@@ -796,7 +779,7 @@ impl Stage<'_> {
                                 )?
                                 .ok_or_else(|| {
                                     tracing::error!(
-                                        "attempted to copy from non-existent path \"{}\" at rev {}",
+                                        "attempted to copy from non-existent directory \"{}\" at rev {}",
                                         copy_from_path.escape_ascii(),
                                         self.root_rev_data[copy_from_rev].svn_rev,
                                     );
@@ -817,31 +800,32 @@ impl Stage<'_> {
                                 copy_from_oid,
                                 self.git_import,
                             )?;
+                            if let Some(metadata_oid) = metadata_oid {
+                                tree_builder.mod_metadata(
+                                    &node_path,
+                                    metadata_oid,
+                                    self.git_import,
+                                )?;
+                            }
 
                             node_ops.push(RootNodeOp {
                                 path: node_path.clone(),
                                 action: RootNodeAction::CopyDir(
-                                    metadata.is_some(),
+                                    metadata_oid.is_some(),
                                     copy_from_rev,
                                     copy_from_path,
                                 ),
                             });
                         } else {
+                            let metadata_oid = metadata_oid.map(Ok).unwrap_or_else(|| {
+                                let metadata = meta::DirMetadata::default();
+                                self.git_import.put_blob(metadata.serialize(), None)
+                            })?;
+                            tree_builder.mkdir(&node_path, metadata_oid, self.git_import)?;
                             node_ops.push(RootNodeOp {
                                 path: node_path.clone(),
                                 action: RootNodeAction::AddDir,
                             });
-                        }
-
-                        if let Some(metadata) = metadata {
-                            let metadata_path = concat_path(&node_path, METADATA_FILE_NAME);
-                            tree_builder.mod_inline(
-                                &metadata_path,
-                                gix_object::tree::EntryKind::Blob.into(),
-                                metadata.serialize(),
-                                prev_metadata_oid,
-                                self.git_import,
-                            )?;
                         }
                     }
                 },
@@ -856,133 +840,127 @@ impl Stage<'_> {
                 return Err(ConvertError);
             }
             if props.is_some() {
-                tracing::error!("SVN dump node record has unused props content");
+                tracing::error!("SVN dump node record has unused properties content");
                 return Err(ConvertError);
             }
         }
 
-        let svn_tree_oid = tree_builder.build(self.git_import)?;
+        self.progress_print.set_progress(format!(
+            "importing SVN revision {svn_rev} - building svn tree",
+        ));
+
+        let svn_tree_oid =
+            tree_builder.build(self.git_import, |tree_oid, tree, tree_base, git_import| {
+                Self::svn_tree_to_git_tree(
+                    self.options,
+                    &mut self.tree_map,
+                    tree_oid,
+                    tree,
+                    tree_base,
+                    git_import,
+                )
+            })?;
 
         Ok((svn_rev_props, next_record, node_ops, svn_tree_oid))
     }
 
-    fn make_root_git_tree(
-        &mut self,
-        svn_rev: u32,
-        node_ops: &[RootNodeOp],
+    fn svn_tree_to_git_tree(
+        options: &Options,
+        tree_map: &mut FHashMap<gix_hash::ObjectId, Option<gix_hash::ObjectId>>,
         svn_tree_oid: gix_hash::ObjectId,
-    ) -> Result<gix_hash::ObjectId, ConvertError> {
-        let mut tree_builder = if let Some(prev_rev_data) = self.root_rev_data.last() {
-            git_wrap::TreeBuilder::with_base(prev_rev_data.git_tree_oid)
-        } else {
-            git_wrap::TreeBuilder::new()
-        };
+        svn_tree: &gix_object::Tree,
+        svn_tree_base: Option<gix_hash::ObjectId>,
+        git_import: &mut git_wrap::Importer,
+    ) -> Result<(), ConvertError> {
+        if tree_map.contains_key(&svn_tree_oid) {
+            return Ok(());
+        }
 
-        for (node_no, node_op) in node_ops.iter().enumerate() {
-            self.progress_print.set_progress(format!(
-                "importing SVN revision {svn_rev} - root git tree - node {} / {}",
-                node_no + 1,
-                node_ops.len(),
-            ));
+        let metadata_oid = svn_tree
+            .entries
+            .iter()
+            .find(|e| e.filename == METADATA_FILE_NAME)
+            .map(|e| e.oid)
+            .unwrap();
 
-            let mut update_dir_metadata = false;
-            match node_op.action {
-                RootNodeAction::DelFile => {
-                    let mut do_delete = true;
-                    match self.file_special_handling(&node_op.path) {
-                        SpecialHandling::None => {}
-                        SpecialHandling::Remove | SpecialHandling::CustomReplace => {
-                            do_delete = false;
-                        }
-                    }
-                    if do_delete {
-                        tree_builder.rm(&node_op.path, self.git_import)?;
-                    }
-                }
-                RootNodeAction::ModFile(mode, blob) => {
-                    match self.file_special_handling(&node_op.path) {
-                        SpecialHandling::None => {
-                            tree_builder.mod_oid(&node_op.path, mode, blob, self.git_import)?;
-                        }
-                        SpecialHandling::Remove => {}
-                        SpecialHandling::CustomReplace => {}
-                    }
-                }
-                RootNodeAction::DelDir(_) => {
-                    tree_builder.rm(&node_op.path, self.git_import)?;
-                }
-                RootNodeAction::AddDir => {
-                    update_dir_metadata = true;
-                }
-                RootNodeAction::CopyDir(has_metadata, copy_from_rev, ref copy_from_path) => {
-                    if let Some((copy_from_mode, copy_from_oid)) = self.git_import.ls(
-                        self.root_rev_data[copy_from_rev].git_tree_oid,
-                        copy_from_path,
-                    )? {
-                        if !copy_from_mode.is_tree() {
-                            tracing::error!(
-                                "\"{}\" from rev {} is expected to be a directory",
-                                copy_from_path.escape_ascii(),
-                                self.root_rev_data[copy_from_rev].svn_rev,
-                            );
-                            return Err(ConvertError);
-                        }
-                        tree_builder.mod_oid(
-                            &node_op.path,
-                            copy_from_mode,
-                            copy_from_oid,
-                            self.git_import,
-                        )?;
-                    }
+        let mut git_tree_entries = Vec::with_capacity(svn_tree.entries.len());
 
-                    update_dir_metadata = has_metadata;
-                }
-                RootNodeAction::ModDir(has_metadata) => {
-                    update_dir_metadata = has_metadata;
-                }
+        if options.generate_gitignore {
+            let raw_metadata = git_import.get_blob(metadata_oid)?;
+            let metadata = meta::DirMetadata::deserialize(&raw_metadata).ok_or_else(|| {
+                tracing::error!("failed to deserialize directory metadata");
+                ConvertError
+            })?;
+
+            let mut gitignore_data = Vec::<u8>::new();
+
+            let from_svnignore = meta::svnignore_to_gitignore(&metadata.ignores, false);
+            if !from_svnignore.is_empty() {
+                gitignore_data.extend(b"# ignores from svn:ignore\n");
+                gitignore_data.extend(from_svnignore);
             }
 
-            if update_dir_metadata {
-                let metadata = self.get_dir_metadata(svn_tree_oid, &node_op.path)?;
+            let from_svnglobalignore = meta::svnignore_to_gitignore(&metadata.global_ignores, true);
+            if !from_svnglobalignore.is_empty() {
+                if !gitignore_data.is_empty() {
+                    gitignore_data.push(b'\n');
+                }
+                gitignore_data.extend(b"# ignores from svn:global-ignores\n");
+                gitignore_data.extend(from_svnglobalignore);
+            }
 
-                if self.options.generate_gitignore {
-                    let mut gitignore_data = Vec::<u8>::new();
+            if !gitignore_data.is_empty() {
+                let gitignore_oid = git_import.put_blob(gitignore_data, None)?;
+                git_tree_entries.push(gix_object::tree::Entry {
+                    mode: gix_object::tree::EntryKind::Blob.into(),
+                    filename: b".gitignore".into(),
+                    oid: gitignore_oid,
+                });
+            }
+        }
 
-                    let from_svnignore = meta::svnignore_to_gitignore(&metadata.ignores, false);
-                    if !from_svnignore.is_empty() {
-                        gitignore_data.extend(b"# ignores from svn:ignore\n");
-                        gitignore_data.extend(from_svnignore);
+        for svn_tree_entry in svn_tree.entries.iter() {
+            if svn_tree_entry.filename == METADATA_FILE_NAME {
+                continue;
+            }
+
+            if svn_tree_entry.mode.is_tree() {
+                if let Some(files_sub_tree_oid) = tree_map[&svn_tree_entry.oid] {
+                    git_tree_entries.push(gix_object::tree::Entry {
+                        mode: svn_tree_entry.mode,
+                        filename: svn_tree_entry.filename.clone(),
+                        oid: files_sub_tree_oid,
+                    });
+                }
+            } else {
+                match Self::file_special_handling(options, &svn_tree_entry.filename) {
+                    SpecialHandling::None => {
+                        git_tree_entries.push(gix_object::tree::Entry {
+                            mode: svn_tree_entry.mode,
+                            filename: svn_tree_entry.filename.clone(),
+                            oid: svn_tree_entry.oid,
+                        });
                     }
-
-                    let from_svnglobalignore =
-                        meta::svnignore_to_gitignore(&metadata.global_ignores, true);
-                    if !from_svnglobalignore.is_empty() {
-                        if !gitignore_data.is_empty() {
-                            gitignore_data.push(b'\n');
-                        }
-                        gitignore_data.extend(b"# ignores from svn:global-ignores\n");
-                        gitignore_data.extend(from_svnglobalignore);
-                    }
-
-                    let gitignore_path = concat_path(&node_op.path, b".gitignore");
-                    if gitignore_data.is_empty() {
-                        tree_builder.rm(&gitignore_path, self.git_import)?;
-                    } else {
-                        tree_builder.mod_inline(
-                            &gitignore_path,
-                            gix_object::tree::EntryKind::Blob.into(),
-                            gitignore_data,
-                            None,
-                            self.git_import,
-                        )?;
-                    }
+                    SpecialHandling::Remove => {}
+                    SpecialHandling::CustomReplace => {}
                 }
             }
         }
 
-        let git_tree_oid = tree_builder.build(self.git_import)?;
+        if git_tree_entries.is_empty() {
+            tree_map.insert(svn_tree_oid, None);
+        } else {
+            git_tree_entries.sort();
+            let git_tree_base = svn_tree_base.and_then(|base| tree_map[&base]);
+            let git_tree = gix_object::Tree {
+                entries: git_tree_entries,
+            };
+            let git_tree_oid = git_import.put(git_tree, git_tree_base)?;
 
-        Ok(git_tree_oid)
+            tree_map.insert(svn_tree_oid, Some(git_tree_oid));
+        }
+
+        Ok(())
     }
 
     fn split_branches(
@@ -1012,7 +990,7 @@ impl Stage<'_> {
                         }
                     }
                 }
-                RootNodeAction::ModFile(_, _) => {
+                RootNodeAction::ModFile => {
                     let dir_path = get_path_base_dir(&node_op.path);
                     match self.options.classify_dir(dir_path) {
                         DirClass::Unbranched | DirClass::BranchParent => {
@@ -1199,10 +1177,7 @@ impl Stage<'_> {
                                 } else {
                                     pending.push_front(RootNodeOp {
                                         path: item_dst_path,
-                                        action: RootNodeAction::ModFile(
-                                            dir_entry.mode,
-                                            dir_entry.oid,
-                                        ),
+                                        action: RootNodeAction::ModFile,
                                     });
                                 }
                             }
@@ -1251,11 +1226,8 @@ impl Stage<'_> {
         svn_rev: u32,
         ops: &[UnbranchedNodeOp],
     ) -> Result<(), ConvertError> {
-        let mut tree_builder = if let Some(prev_rev_data) = self.unbranched_rev_data.last() {
-            git_wrap::TreeBuilder::with_base(prev_rev_data.tree_oid)
-        } else {
-            git_wrap::TreeBuilder::new()
-        };
+        let mut change_set =
+            crate::git::ChangeSet::new(self.unbranched_rev_data.last().map(|r| r.tree_oid));
 
         let root_rev = self.root_rev_data.len() - 1;
 
@@ -1270,42 +1242,46 @@ impl Stage<'_> {
             match op.action {
                 UnbranchedNodeAction::DelFile => {
                     let mut do_delete = true;
-                    match self.file_special_handling(&op.path) {
+                    let file_name = op.path.split(|&c| c == b'/').next_back().unwrap();
+                    match Self::file_special_handling(self.options, file_name) {
                         SpecialHandling::None => {}
                         SpecialHandling::Remove | SpecialHandling::CustomReplace => {
                             do_delete = false;
                         }
                     }
                     if do_delete {
-                        tree_builder.rm(&op.path, self.git_import)?;
+                        change_set.remove(&op.path);
                     }
                 }
-                UnbranchedNodeAction::ModFile => match self.file_special_handling(&op.path) {
-                    SpecialHandling::None => {
-                        let (mode, blob) = self
-                            .git_import
-                            .ls(self.root_rev_data[root_rev].svn_tree_oid, &op.path)?
-                            .ok_or_else(|| {
-                                tracing::error!(
-                                    "missing path \"{}\" in svn tree",
-                                    op.path.escape_ascii(),
-                                );
-                                ConvertError
-                            })?;
-                        tree_builder.mod_oid(&op.path, mode, blob, self.git_import)?;
+                UnbranchedNodeAction::ModFile => {
+                    let file_name = op.path.split(|&c| c == b'/').next_back().unwrap();
+                    match Self::file_special_handling(self.options, file_name) {
+                        SpecialHandling::None => {
+                            let (mode, blob) = self
+                                .git_import
+                                .ls(self.root_rev_data[root_rev].svn_tree_oid, &op.path)?
+                                .ok_or_else(|| {
+                                    tracing::error!(
+                                        "missing path \"{}\" in meta tree",
+                                        op.path.escape_ascii(),
+                                    );
+                                    ConvertError
+                                })?;
+                            change_set.change(&op.path, mode, blob);
+                        }
+                        SpecialHandling::Remove => {}
+                        SpecialHandling::CustomReplace => {}
                     }
-                    SpecialHandling::Remove => {}
-                    SpecialHandling::CustomReplace => {}
-                },
+                }
                 UnbranchedNodeAction::DelDir => {
-                    tree_builder.rm(&op.path, self.git_import)?;
+                    change_set.remove(&op.path);
                 }
                 UnbranchedNodeAction::AddDir => {
                     update_dir_metadata = true;
                 }
                 UnbranchedNodeAction::CopyDir(has_metadata, copy_from_rev, ref copy_from_path) => {
                     if let Some((copy_from_mode, copy_from_oid)) = self.git_import.ls(
-                        self.root_rev_data[copy_from_rev].git_tree_oid,
+                        self.root_rev_data[copy_from_rev].svn_tree_oid,
                         copy_from_path,
                     )? {
                         if !copy_from_mode.is_tree() {
@@ -1316,12 +1292,12 @@ impl Stage<'_> {
                             );
                             return Err(ConvertError);
                         }
-                        tree_builder.mod_oid(
-                            &op.path,
-                            copy_from_mode,
-                            copy_from_oid,
-                            self.git_import,
-                        )?;
+                        let copy_from_oid = self.tree_map[&copy_from_oid];
+                        if let Some(copy_from_oid) = copy_from_oid {
+                            change_set.change(&op.path, copy_from_mode, copy_from_oid);
+                        } else {
+                            change_set.remove(&op.path);
+                        }
                     }
 
                     update_dir_metadata = has_metadata;
@@ -1332,14 +1308,23 @@ impl Stage<'_> {
             }
 
             if update_dir_metadata && self.options.generate_gitignore {
-                let gitignore_path = concat_path(&op.path, b".gitignore");
-                if let Some((mode, blob)) = self
+                let Some((_, svn_dir_oid)) = self
                     .git_import
-                    .ls(self.root_rev_data[root_rev].git_tree_oid, &gitignore_path)?
+                    .ls(self.root_rev_data[root_rev].svn_tree_oid, &op.path)?
+                else {
+                    tracing::error!("missing directory \"{}\"", op.path.escape_ascii(),);
+                    return Err(ConvertError);
+                };
+                let git_dir_oid = self.tree_map[&svn_dir_oid];
+
+                let gitignore_path = concat_path(&op.path, b".gitignore");
+                if let Some((mode, blob)) = git_dir_oid
+                    .and_then(|dir_oid| self.git_import.ls(dir_oid, b".gitignore").transpose())
+                    .transpose()?
                 {
-                    tree_builder.mod_oid(&gitignore_path, mode, blob, self.git_import)?;
+                    change_set.change(&gitignore_path, mode, blob);
                 } else {
-                    tree_builder.rm(&gitignore_path, self.git_import)?;
+                    change_set.remove(&gitignore_path);
                 }
             }
         }
@@ -1348,7 +1333,14 @@ impl Stage<'_> {
             self.head_branch = Some(Head::Unbranched);
         }
 
-        let tree_oid = tree_builder.build(self.git_import)?;
+        let tree_oid = change_set
+            .apply(self.git_import.inner())
+            .map_err(|e| {
+                tracing::error!("failed to apply git change set: {e}");
+                ConvertError
+            })?
+            .unwrap_or_else(|| self.git_import.empty_tree_oid());
+
         self.unbranched_rev_data
             .push(UnbranchedRevData { root_rev, tree_oid });
 
@@ -1534,29 +1526,39 @@ impl Stage<'_> {
             branch_data.rev_map.push((root_commit, branch_rev));
 
             let tail_commit = parent_commit.map_or(branch_rev, |p| self.branch_rev_data[p].tail);
-            let tree_oid = if let Some((mode, tree_oid)) = self
+            let tree_oid = if let Some((mode, svn_tree_oid)) = self
                 .git_import
-                .ls(self.root_rev_data[root_commit].git_tree_oid, branch_path)?
+                .ls(self.root_rev_data[root_commit].svn_tree_oid, branch_path)?
             {
                 if !mode.is_tree() {
                     tracing::error!("branch root is not a tree");
                     return Err(ConvertError);
                 }
+                let git_tree_oid = self.tree_map[&svn_tree_oid];
                 if branch_data.partial_sub_path.is_empty() {
-                    tree_oid
+                    git_tree_oid.unwrap_or_else(|| self.git_import.empty_tree_oid())
                 } else {
                     let parent_tree_oid = self.branch_rev_data[parent_commit.unwrap()].tree_oid;
-                    let mut tree_builder = git_wrap::TreeBuilder::with_base(parent_tree_oid);
-                    tree_builder.mod_oid(
-                        &branch_data.partial_sub_path,
-                        mode,
-                        tree_oid,
-                        self.git_import,
-                    )?;
-                    tree_builder.build(self.git_import)?
+                    let mut change_set = crate::git::ChangeSet::new(Some(parent_tree_oid));
+                    if let Some(git_tree_oid) = git_tree_oid {
+                        change_set.change(&branch_data.partial_sub_path, mode, git_tree_oid);
+                    } else {
+                        change_set.remove(&branch_data.partial_sub_path);
+                    }
+                    change_set
+                        .apply(self.git_import.inner())
+                        .map_err(|e| {
+                            tracing::error!("failed to apply git change set: {e}");
+                            ConvertError
+                        })?
+                        .unwrap_or_else(|| self.git_import.empty_tree_oid())
                 }
             } else {
-                self.git_import.empty_tree_oid()
+                tracing::error!(
+                    "missing branch path \"{}\" in svn tree",
+                    branch_path.escape_ascii(),
+                );
+                return Err(ConvertError);
             };
 
             self.branch_rev_data.push(BranchRevData {

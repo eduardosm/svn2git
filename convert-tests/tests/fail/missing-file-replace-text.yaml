@@ -12,9 +12,6 @@ svn-revs:
   - props:
       svn:log: replace x
     nodes:
-      - path: trunk
-        kind: dir
-        action: add
       - path: trunk/x
         kind: file
         action: replace

@@ -14,7 +14,7 @@ svn-revs:
     nodes:
       - path: ""
         kind: dir
-        action: add
+        action: change
         props:
           svn:ignore: |
             a

@@ -358,10 +358,11 @@ fn run_convert(
 
     if cmd_out.status.code() != Some(expect_exit_code) {
         return Err(format!(
-            "converter finished with exit code {}\nsvn2git stdout:\n{}svn2git stderr:\n{}",
+            "converter finished with exit code {}\nsvn2git stdout:\n{}svn2git stderr:\n{}logs path: {}",
             cmd_out.status,
             String::from_utf8_lossy(&cmd_out.stdout),
             String::from_utf8_lossy(&cmd_out.stderr),
+            conv_log_path.display(),
         ));
     }
 
