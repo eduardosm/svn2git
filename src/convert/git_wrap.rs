@@ -170,12 +170,9 @@ impl TreeBuilder {
             })
     }
 
-    pub(super) fn materialize(
-        self,
-        importer: &mut Importer,
-    ) -> Result<gix_hash::ObjectId, ConvertError> {
+    pub(super) fn build(self, importer: &mut Importer) -> Result<gix_hash::ObjectId, ConvertError> {
         self.tree_builder
-            .materialize(&mut importer.importer)
+            .build(&mut importer.importer)
             .map_err(|e| {
                 tracing::error!("failed to materialize tree: {e}");
                 ConvertError

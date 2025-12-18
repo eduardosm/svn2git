@@ -2,12 +2,12 @@ use crate::FHashMap;
 use crate::convert::{GitCommitMeta, GitTagMeta};
 use crate::user_map::UserMap;
 
-pub(crate) struct GitMetaMaker<'a> {
+pub(crate) struct GitMetadataMaker<'a> {
     user_map: &'a UserMap,
     jinja_env: minijinja::Environment<'a>,
 }
 
-impl<'a> GitMetaMaker<'a> {
+impl<'a> GitMetadataMaker<'a> {
     pub(crate) fn new(
         user_map: &'a UserMap,
         user_fallback_template: &'a str,
@@ -34,7 +34,7 @@ impl<'a> GitMetaMaker<'a> {
     }
 }
 
-impl crate::convert::GitMetaMaker for GitMetaMaker<'_> {
+impl crate::convert::GitMetaMaker for GitMetadataMaker<'_> {
     fn make_git_commit_meta(
         &self,
         svn_uuid: Option<&uuid::Uuid>,
@@ -125,7 +125,7 @@ impl crate::convert::GitMetaMaker for GitMetaMaker<'_> {
     }
 }
 
-impl GitMetaMaker<'_> {
+impl GitMetadataMaker<'_> {
     fn convert_author(
         &self,
         jinja_ctx: &JinjaCtx,

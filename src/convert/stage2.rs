@@ -8,7 +8,7 @@ use crate::{FHashMap, git};
 pub(super) fn run(
     progress_print: &ProgressPrint,
     options: &Options,
-    make_meta: &dyn GitMetaMaker,
+    metadata_maker: &dyn GitMetaMaker,
     git_import: &mut git_wrap::Importer,
     stage1_out: &stage1::Output,
 ) -> Result<(), ConvertError> {
@@ -21,7 +21,7 @@ pub(super) fn run(
     Stage {
         progress_print,
         options,
-        make_meta,
+        metadata_maker,
         git_import,
         stage1_out,
         unbranched_name,
@@ -41,7 +41,7 @@ struct BranchRevGitData {
 struct Stage<'a> {
     progress_print: &'a ProgressPrint,
     options: &'a Options,
-    make_meta: &'a dyn GitMetaMaker,
+    metadata_maker: &'a dyn GitMetaMaker,
     git_import: &'a mut git_wrap::Importer,
     stage1_out: &'a stage1::Output,
     unbranched_name: Option<String>,
@@ -275,7 +275,7 @@ impl Stage<'_> {
         let root_commit = unbranch_rev_data.root_rev;
 
         let git_commit_meta = self
-            .make_meta
+            .metadata_maker
             .make_git_commit_meta(
                 self.stage1_out.svn_uuid.as_ref(),
                 self.stage1_out.root_rev_data[root_commit].svn_rev,
@@ -368,7 +368,7 @@ impl Stage<'_> {
         }
 
         let git_commit_meta = self
-            .make_meta
+            .metadata_maker
             .make_git_commit_meta(
                 self.stage1_out.svn_uuid.as_ref(),
                 self.stage1_out.root_rev_data[root_commit].svn_rev,
@@ -426,7 +426,7 @@ impl Stage<'_> {
         assert_eq!(branch_data.rev_map.len(), 1);
 
         let git_tag_meta = self
-            .make_meta
+            .metadata_maker
             .make_git_tag_meta(
                 self.stage1_out.svn_uuid.as_ref(),
                 self.stage1_out.root_rev_data[root_commit].svn_rev,

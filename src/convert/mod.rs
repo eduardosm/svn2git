@@ -43,7 +43,7 @@ pub(crate) trait GitMetaMaker {
 pub(crate) fn convert(
     progress_print: &ProgressPrint,
     options: &Options,
-    make_meta: &dyn GitMetaMaker,
+    makedata_meta: &dyn GitMetaMaker,
     src_path: &std::path::Path,
     dst_path: &std::path::Path,
 ) -> Result<(), ConvertError> {
@@ -56,7 +56,7 @@ pub(crate) fn convert(
         stage2::run(
             progress_print,
             options,
-            make_meta,
+            makedata_meta,
             &mut git_import,
             &stage1_out,
         )?;
