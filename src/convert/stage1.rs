@@ -187,7 +187,7 @@ pub(super) struct BranchRevData {
 #[derive(Debug)]
 enum SpecialHandling {
     None,
-    Remove,
+    Ignore,
     CustomReplace,
 }
 
@@ -242,11 +242,7 @@ impl Stage<'_> {
             .split(|&c| c == b'/' || (backslash && c == b'\\'))
             .enumerate()
         {
-            if component.is_empty()
-                || component == b"."
-                || component == b".."
-                || component == b".git"
-            {
+            if component.is_empty() || component == b"." || component == b".." {
                 tracing::error!(
                     "invalid path component name: \"{}\"",
                     component.escape_ascii(),
@@ -262,13 +258,17 @@ impl Stage<'_> {
     }
 
     fn file_special_handling(options: &Options, file_name: &[u8]) -> SpecialHandling {
-        if options.delete_files.is_match(file_name) {
-            SpecialHandling::Remove
+        if file_name == b".git" || options.delete_files.is_match(file_name) {
+            SpecialHandling::Ignore
         } else if options.generate_gitignore && file_name == b".gitignore" {
             SpecialHandling::CustomReplace
         } else {
             SpecialHandling::None
         }
+    }
+
+    fn ignore_directory(dir_name: &[u8]) -> bool {
+        dir_name == b".git"
     }
 
     fn mod_file_required_in_mergeinfo(&self, path: &[u8]) -> bool {
@@ -931,12 +931,14 @@ impl Stage<'_> {
             }
 
             if svn_tree_entry.mode.is_tree() {
-                if let Some(files_sub_tree_oid) = tree_map[&svn_tree_entry.oid] {
-                    git_tree_entries.push(gix_object::tree::Entry {
-                        mode: svn_tree_entry.mode,
-                        filename: svn_tree_entry.filename.clone(),
-                        oid: files_sub_tree_oid,
-                    });
+                if !Self::ignore_directory(&svn_tree_entry.filename) {
+                    if let Some(files_sub_tree_oid) = tree_map[&svn_tree_entry.oid] {
+                        git_tree_entries.push(gix_object::tree::Entry {
+                            mode: svn_tree_entry.mode,
+                            filename: svn_tree_entry.filename.clone(),
+                            oid: files_sub_tree_oid,
+                        });
+                    }
                 }
             } else {
                 match Self::file_special_handling(options, &svn_tree_entry.filename) {
@@ -947,7 +949,7 @@ impl Stage<'_> {
                             oid: svn_tree_entry.oid,
                         });
                     }
-                    SpecialHandling::Remove => {}
+                    SpecialHandling::Ignore => {}
                     SpecialHandling::CustomReplace => {}
                 }
             }
@@ -1238,31 +1240,34 @@ impl Stage<'_> {
 
         let root_rev = self.root_rev_data.len() - 1;
 
-        for (op_no, op) in ops.iter().enumerate() {
+        'op_loop: for (op_no, op) in ops.iter().enumerate() {
             self.progress_print.set_progress(format!(
                 "importing SVN revision {svn_rev} - unbranched - node {} / {}",
                 op_no + 1,
                 ops.len(),
             ));
 
+            let mut components = op.path.split(|&c| c == b'/');
+            let entry_name = components.next_back().unwrap();
+
+            for component in components {
+                if Self::ignore_directory(component) {
+                    continue 'op_loop;
+                }
+            }
+
             let mut update_dir_metadata = false;
             match op.action {
                 UnbranchedNodeAction::DelFile => {
-                    let mut do_delete = true;
-                    let file_name = op.path.split(|&c| c == b'/').next_back().unwrap();
-                    match Self::file_special_handling(self.options, file_name) {
-                        SpecialHandling::None => {}
-                        SpecialHandling::Remove | SpecialHandling::CustomReplace => {
-                            do_delete = false;
+                    match Self::file_special_handling(self.options, entry_name) {
+                        SpecialHandling::None => {
+                            change_set.remove(&op.path);
                         }
-                    }
-                    if do_delete {
-                        change_set.remove(&op.path);
+                        SpecialHandling::Ignore | SpecialHandling::CustomReplace => {}
                     }
                 }
                 UnbranchedNodeAction::ModFile => {
-                    let file_name = op.path.split(|&c| c == b'/').next_back().unwrap();
-                    match Self::file_special_handling(self.options, file_name) {
+                    match Self::file_special_handling(self.options, entry_name) {
                         SpecialHandling::None => {
                             let (mode, blob) = self
                                 .git_import
@@ -1276,41 +1281,49 @@ impl Stage<'_> {
                                 })?;
                             change_set.change(&op.path, mode, blob);
                         }
-                        SpecialHandling::Remove => {}
+                        SpecialHandling::Ignore => {}
                         SpecialHandling::CustomReplace => {}
                     }
                 }
                 UnbranchedNodeAction::DelDir => {
-                    change_set.remove(&op.path);
+                    if !Self::ignore_directory(entry_name) {
+                        change_set.remove(&op.path);
+                    }
                 }
                 UnbranchedNodeAction::AddDir => {
-                    update_dir_metadata = true;
+                    if !Self::ignore_directory(entry_name) {
+                        update_dir_metadata = true;
+                    }
                 }
                 UnbranchedNodeAction::CopyDir(has_metadata, copy_from_rev, ref copy_from_path) => {
-                    if let Some((copy_from_mode, copy_from_oid)) = self.git_import.ls(
-                        self.root_rev_data[copy_from_rev].svn_tree_oid,
-                        copy_from_path,
-                    )? {
-                        if !copy_from_mode.is_tree() {
-                            tracing::error!(
-                                "\"{}\" at rev {} is expected to be a directory",
-                                copy_from_path.escape_ascii(),
-                                self.root_rev_data[copy_from_rev].svn_rev,
-                            );
-                            return Err(ConvertError);
+                    if !Self::ignore_directory(entry_name) {
+                        if let Some((copy_from_mode, copy_from_oid)) = self.git_import.ls(
+                            self.root_rev_data[copy_from_rev].svn_tree_oid,
+                            copy_from_path,
+                        )? {
+                            if !copy_from_mode.is_tree() {
+                                tracing::error!(
+                                    "\"{}\" at rev {} is expected to be a directory",
+                                    copy_from_path.escape_ascii(),
+                                    self.root_rev_data[copy_from_rev].svn_rev,
+                                );
+                                return Err(ConvertError);
+                            }
+                            let copy_from_oid = self.tree_map[&copy_from_oid];
+                            if let Some(copy_from_oid) = copy_from_oid {
+                                change_set.change(&op.path, copy_from_mode, copy_from_oid);
+                            } else {
+                                change_set.remove(&op.path);
+                            }
                         }
-                        let copy_from_oid = self.tree_map[&copy_from_oid];
-                        if let Some(copy_from_oid) = copy_from_oid {
-                            change_set.change(&op.path, copy_from_mode, copy_from_oid);
-                        } else {
-                            change_set.remove(&op.path);
-                        }
-                    }
 
-                    update_dir_metadata = has_metadata;
+                        update_dir_metadata = has_metadata;
+                    }
                 }
                 UnbranchedNodeAction::ModDir(has_metadata) => {
-                    update_dir_metadata = has_metadata;
+                    if !Self::ignore_directory(entry_name) {
+                        update_dir_metadata = has_metadata;
+                    }
                 }
             }
 

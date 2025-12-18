@@ -1,0 +1,93 @@
+svn-revs:
+  - props:
+      svn:log: init trunk
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+      - path: trunk/x
+        kind: file
+        action: add
+        text: "file x\n"
+      - path: trunk/.git
+        kind: file
+        action: add
+        text: "file .git\n"
+  - props:
+      svn:log: delete .git
+    nodes:
+      - path: trunk/.git
+        kind: file
+        action: delete
+  - props:
+      svn:log: replace .git with directory
+    nodes:
+      - path: trunk/x
+        kind: file
+        action: add
+        text: "file x\n"
+      - path: trunk/.git
+        kind: dir
+        action: add
+      - path: trunk/.git/y
+        kind: file
+        action: add
+        text: "file y\n"
+  - props:
+      svn:log: copy .git directory
+    nodes:
+      - path: trunk/dot-git-copy
+        kind: dir
+        action: add
+        copy-from-path: trunk/.git
+  - props:
+      svn:log: change both y
+    nodes:
+      - path: trunk/.git/y
+        kind: file
+        action: change
+        text: "modified file y 1\n"
+      - path: trunk/dot-git-copy/y
+        kind: file
+        action: change
+        text: "modified file y 2\n"
+
+conv-params: |
+  branches = ["trunk"]
+
+git-revs:
+  - rev: trunk~4
+    tree:
+      x:
+        type: normal
+        data: "file x\n"
+  - rev: trunk~3
+    tree:
+      x:
+        type: normal
+        data: "file x\n"
+  - rev: trunk~2
+    tree:
+      x:
+        type: normal
+        data: "file x\n"
+  - rev: trunk~1
+    tree:
+      x:
+        type: normal
+        data: "file x\n"
+      dot-git-copy:
+        type: dir
+      dot-git-copy/y:
+        type: normal
+        data: "file y\n"
+  - rev: trunk~0
+    tree:
+      x:
+        type: normal
+        data: "file x\n"
+      dot-git-copy:
+        type: dir
+      dot-git-copy/y:
+        type: normal
+        data: "modified file y 2\n"
