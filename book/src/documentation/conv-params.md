@@ -66,6 +66,8 @@
   This is useful when SVN branches are created by copying only a subdirectory
   of another branch instead of the entire branch.
 
+  **Note:** This feature is experimental.
+
   <u>Example</u>
 
   ```toml
@@ -85,8 +87,6 @@
     "tags/*",
   ]
   ```
-
-  **Note:** Merges from/to partial branches are not yet supported.
 
 * `head` (default: `trunk`)
 
