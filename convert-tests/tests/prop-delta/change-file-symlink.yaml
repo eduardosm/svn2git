@@ -1,0 +1,36 @@
+svn-dump-version: 3
+svn-revs:
+  - props:
+      svn:log: init
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+      - path: trunk/x
+        kind: file
+        action: add
+        text: "link target"
+  - props:
+      svn:log: convert x to symlink
+    nodes:
+      - path: trunk/x
+        kind: file
+        action: change
+        prop-delta: true
+        props:
+          svn:special: "*"
+
+conv-params: |
+  branches = ["trunk"]
+
+git-revs:
+  - rev: trunk~1
+    tree:
+      x:
+        type: normal
+        data: "link target"
+  - rev: trunk~0
+    tree:
+      x:
+        type: symlink
+        target: "target"

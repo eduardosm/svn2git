@@ -11,6 +11,7 @@
 - Files and directories named `.svn` and `.git` are now allowed to appear in the
   Subversion repository. Note that those named `.git` will not be included in the
   resulting Git repository.
+- Subversion operations that change a file from non-symlink to symlink are now allowed.
 
 ### Other
 
