@@ -1,10 +1,11 @@
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use super::options::{DirClass, Options};
 use super::tree_builder::METADATA_FILE_NAME;
 use super::{ConvertError, git_wrap, meta, tree_builder};
 use crate::term_out::ProgressPrint;
-use crate::{FHashMap, svn};
+use crate::{FHashMap, FHashSet, svn};
 
 pub(super) enum Head {
     Branch(usize),
@@ -53,6 +54,7 @@ pub(super) fn run(
         head_branch: None,
         live_branches: FHashMap::default(),
         path_to_branch: FHashMap::default(),
+        has_partial_branches: false,
         branch_path_commits: FHashMap::default(),
     }
     .run()?;
@@ -88,6 +90,7 @@ struct BranchOps {
     modify: bool,
     root_metadata: bool,
     required_in_mergeinfo: bool,
+    reset_sub_paths: FHashSet<Vec<u8>>, // TODO: use this
 }
 
 #[derive(Debug)]
@@ -104,6 +107,7 @@ impl Default for BranchOps {
             modify: false,
             root_metadata: false,
             required_in_mergeinfo: false,
+            reset_sub_paths: FHashSet::default(),
         }
     }
 }
@@ -138,7 +142,9 @@ struct Stage<'a> {
     branch_rev_data: Vec<BranchRevData>,
     head_branch: Option<Head>,
     live_branches: FHashMap<Vec<u8>, usize>,
-    path_to_branch: FHashMap<Vec<u8>, Vec<usize>>,
+    // partial sub-path -> (branch path -> branch id)
+    path_to_branch: FHashMap<Vec<u8>, FHashMap<Vec<u8>, Vec<usize>>>,
+    has_partial_branches: bool,
     branch_path_commits: FHashMap<Vec<u8>, Vec<(usize, usize)>>,
 }
 
@@ -1079,6 +1085,7 @@ impl Stage<'_> {
                             branch_ops.root_metadata = true;
                         } else {
                             branch_ops.modify = true;
+                            branch_ops.reset_sub_paths.insert(subdir.to_vec());
                         }
                         branch_ops.required_in_mergeinfo = true;
                     }
@@ -1458,7 +1465,7 @@ impl Stage<'_> {
                 self.branch_data.push(BranchData {
                     svn_path: branch_path.to_vec(),
                     is_tag,
-                    partial_sub_path,
+                    partial_sub_path: partial_sub_path.clone(),
                     deleted: false,
                     tip_commit,
                     first_root_rev: root_commit,
@@ -1466,7 +1473,10 @@ impl Stage<'_> {
                     rev_map: Vec::new(),
                 });
                 self.live_branches.insert(branch_path.to_vec(), new_branch);
+                self.has_partial_branches |= !partial_sub_path.is_empty();
                 self.path_to_branch
+                    .entry(partial_sub_path)
+                    .or_default()
                     .entry(branch_path.to_vec())
                     .or_default()
                     .push(new_branch);
@@ -1489,7 +1499,7 @@ impl Stage<'_> {
             let (added_svn_merges, removed_svn_merges) = if !self.options.enable_merges {
                 (BTreeSet::new(), BTreeSet::new())
             } else if let Some(parent_commit) = parent_commit {
-                if branch_ops.root_metadata {
+                if branch_ops.root_metadata || self.has_partial_branches {
                     self.gather_svn_merges(branch, branch_rev, parent_commit)?
                 } else {
                     (BTreeSet::new(), BTreeSet::new())
@@ -1593,11 +1603,6 @@ impl Stage<'_> {
         branch_rev: usize,
         branch_tip_commit: usize,
     ) -> Result<(BTreeSet<usize>, BTreeSet<usize>), ConvertError> {
-        if !self.branch_data[branch].partial_sub_path.is_empty() {
-            // TODO: merges into partial branches
-            return Ok((BTreeSet::new(), BTreeSet::new()));
-        }
-
         let mut commit_history = Vec::new();
         let mut history_commit = Some(branch_tip_commit);
         while let Some(some_commit) = history_commit {
@@ -1616,84 +1621,158 @@ impl Stage<'_> {
             prev_svn_merges.extend(&self.branch_rev_data[history_commit].added_svn_merges);
         }
 
-        let metadata = self.get_dir_metadata(
-            self.root_rev_data.last().unwrap().svn_tree_oid,
-            &self.branch_data[branch].svn_path,
-        )?;
-        let svn_mergeinfo =
-            meta::parse_mergeinfo(&metadata.mergeinfo, &metadata.svnmerge_integrated);
-
         let mut current_svn_merges = BTreeSet::new();
-        for (merged_svn_path, merged_svn_revs) in svn_mergeinfo.iter() {
-            let Some(branch_list) = self.path_to_branch.get(merged_svn_path).map(Vec::as_slice)
+
+        let dst_partial_subpath = self.branch_data[branch].partial_sub_path.as_slice();
+        for (src_partial_subpath, path_to_branch) in self.path_to_branch.iter() {
+            let merge_src_suffix;
+            let merge_dst_path;
+            match (
+                src_partial_subpath.is_empty(),
+                dst_partial_subpath.is_empty(),
+            ) {
+                (true, true) => {
+                    merge_src_suffix = b"".as_slice();
+                    merge_dst_path = Cow::Borrowed(self.branch_data[branch].svn_path.as_slice());
+                }
+                (false, true) => {
+                    merge_src_suffix = b"".as_slice();
+                    merge_dst_path = Cow::Owned(concat_path(
+                        &self.branch_data[branch].svn_path,
+                        src_partial_subpath,
+                    ));
+                }
+                (true, false) => {
+                    merge_src_suffix = dst_partial_subpath;
+                    merge_dst_path = Cow::Borrowed(self.branch_data[branch].svn_path.as_slice());
+                }
+                (false, false) => {
+                    // Get common prefix length
+                    let common_len = src_partial_subpath
+                        .iter()
+                        .zip(dst_partial_subpath.iter())
+                        .take_while(|&(a, b)| a == b)
+                        .count();
+                    if common_len == src_partial_subpath.len()
+                        && common_len == dst_partial_subpath.len()
+                    {
+                        merge_src_suffix = b"".as_slice();
+                        merge_dst_path =
+                            Cow::Borrowed(self.branch_data[branch].svn_path.as_slice());
+                    } else if common_len == src_partial_subpath.len()
+                        && dst_partial_subpath[common_len] == b'/'
+                    {
+                        merge_src_suffix = &dst_partial_subpath[(common_len + 1)..];
+                        merge_dst_path =
+                            Cow::Borrowed(self.branch_data[branch].svn_path.as_slice());
+                    } else if common_len == dst_partial_subpath.len()
+                        && src_partial_subpath[common_len] == b'/'
+                    {
+                        merge_src_suffix = b"".as_slice();
+                        merge_dst_path = Cow::Owned(concat_path(
+                            &self.branch_data[branch].svn_path,
+                            &src_partial_subpath[(common_len + 1)..],
+                        ));
+                    } else {
+                        // Disjoint partial branches
+                        continue;
+                    }
+                }
+            }
+
+            let Some(metadata) = self.try_get_dir_metadata(
+                self.root_rev_data.last().unwrap().svn_tree_oid,
+                &merge_dst_path,
+            )?
             else {
-                // merge from non-branch
                 continue;
             };
+            let svn_mergeinfo =
+                meta::parse_mergeinfo(&metadata.mergeinfo, &metadata.svnmerge_integrated);
 
-            for &merged_branch in branch_list.iter() {
-                if merged_branch == branch {
-                    // skip merges from itself
-                    continue;
-                }
-
-                if !self.branch_data[merged_branch].partial_sub_path.is_empty() {
-                    // TODO: merges from partial branches
-                    continue;
-                }
-
-                let branch_first_root_rev = self.branch_data[merged_branch].first_root_rev;
-                let branch_last_root_rev = self.branch_data[merged_branch].last_root_rev;
-
-                let branch_first_svn_rev = self.root_rev_data[branch_first_root_rev].svn_rev;
-                let branch_last_svn_rev = self.root_rev_data[branch_last_root_rev].svn_rev;
-
-                for &(mut start_svn_rev, mut end_svn_rev, non_inheritable) in merged_svn_revs.iter()
+            for (merged_svn_path, merged_svn_revs) in svn_mergeinfo.iter() {
+                let unsuffixed_merged_svn_path = if merge_src_suffix.is_empty() {
+                    merged_svn_path.as_slice()
+                } else if let Some(unsuffixed) = merged_svn_path
+                    .strip_suffix(merge_src_suffix)
+                    .and_then(|s| s.strip_suffix(b"/"))
                 {
-                    if non_inheritable {
+                    unsuffixed
+                } else {
+                    // merge from non-branch
+                    continue;
+                };
+                let Some(branch_list) = path_to_branch
+                    .get(unsuffixed_merged_svn_path)
+                    .map(Vec::as_slice)
+                else {
+                    // merge from non-branch
+                    continue;
+                };
+
+                for &merged_branch in branch_list.iter() {
+                    if merged_branch == branch {
+                        // skip merges from itself
                         continue;
                     }
 
-                    if start_svn_rev > branch_last_svn_rev || end_svn_rev < branch_first_svn_rev {
-                        // range does not include any commit made in this branch
-                        continue;
-                    }
+                    let branch_first_root_rev = self.branch_data[merged_branch].first_root_rev;
+                    let branch_last_root_rev = self.branch_data[merged_branch].last_root_rev;
 
-                    start_svn_rev = start_svn_rev.max(branch_first_svn_rev);
-                    end_svn_rev = end_svn_rev.min(branch_last_svn_rev);
+                    let branch_first_svn_rev = self.root_rev_data[branch_first_root_rev].svn_rev;
+                    let branch_last_svn_rev = self.root_rev_data[branch_last_root_rev].svn_rev;
 
-                    let start_root_rev = loop {
-                        if let Some(&r) = self.svn_rev_map.get(&start_svn_rev) {
-                            break r;
-                        } else {
-                            // At some point it will reach `branch_last_svn_rev`
-                            start_svn_rev += 1;
-                        }
-                    };
-
-                    let end_root_rev = loop {
-                        if let Some(&r) = self.svn_rev_map.get(&end_svn_rev) {
-                            break r;
-                        } else {
-                            // At some point it will reach `branch_first_svn_rev`
-                            end_svn_rev -= 1;
-                        }
-                    };
-
-                    if start_root_rev > branch_last_root_rev || end_root_rev < branch_first_root_rev
+                    for &(mut start_svn_rev, mut end_svn_rev, non_inheritable) in
+                        merged_svn_revs.iter()
                     {
-                        // range does not include any commit made in this branch
-                        continue;
-                    }
+                        if non_inheritable {
+                            continue;
+                        }
 
-                    let start_merged_root_rev = branch_first_root_rev.max(start_root_rev);
-                    let end_merged_root_rev = branch_last_root_rev.min(end_root_rev);
-                    for merged_root_rev in start_merged_root_rev..=end_merged_root_rev {
-                        if let Ok(i) = self.branch_data[merged_branch]
-                            .rev_map
-                            .binary_search_by_key(&merged_root_rev, |&(c, _)| c)
+                        if start_svn_rev > branch_last_svn_rev || end_svn_rev < branch_first_svn_rev
                         {
-                            current_svn_merges.insert(self.branch_data[merged_branch].rev_map[i].1);
+                            // range does not include any commit made in this branch
+                            continue;
+                        }
+
+                        start_svn_rev = start_svn_rev.max(branch_first_svn_rev);
+                        end_svn_rev = end_svn_rev.min(branch_last_svn_rev);
+
+                        let start_root_rev = loop {
+                            if let Some(&r) = self.svn_rev_map.get(&start_svn_rev) {
+                                break r;
+                            } else {
+                                // At some point it will reach `branch_last_svn_rev`
+                                start_svn_rev += 1;
+                            }
+                        };
+
+                        let end_root_rev = loop {
+                            if let Some(&r) = self.svn_rev_map.get(&end_svn_rev) {
+                                break r;
+                            } else {
+                                // At some point it will reach `branch_first_svn_rev`
+                                end_svn_rev -= 1;
+                            }
+                        };
+
+                        if start_root_rev > branch_last_root_rev
+                            || end_root_rev < branch_first_root_rev
+                        {
+                            // range does not include any commit made in this branch
+                            continue;
+                        }
+
+                        let start_merged_root_rev = branch_first_root_rev.max(start_root_rev);
+                        let end_merged_root_rev = branch_last_root_rev.min(end_root_rev);
+                        for merged_root_rev in start_merged_root_rev..=end_merged_root_rev {
+                            if let Ok(i) = self.branch_data[merged_branch]
+                                .rev_map
+                                .binary_search_by_key(&merged_root_rev, |&(c, _)| c)
+                            {
+                                current_svn_merges
+                                    .insert(self.branch_data[merged_branch].rev_map[i].1);
+                            }
                         }
                     }
                 }
@@ -1750,15 +1829,24 @@ impl Stage<'_> {
         Ok((added_svn_merges, removed_svn_merges))
     }
 
-    fn get_dir_metadata(
+    /// Returns `Ok(None)` if the directory does not exist.
+    fn try_get_dir_metadata(
         &self,
         svn_tree_oid: gix_hash::ObjectId,
         dir_path: &[u8],
-    ) -> Result<meta::DirMetadata, ConvertError> {
-        let metadata_path = concat_path(dir_path, METADATA_FILE_NAME);
+    ) -> Result<Option<meta::DirMetadata>, ConvertError> {
+        let Some((path_entry_type, path_entry_oid)) = self.git_import.ls(svn_tree_oid, dir_path)?
+        else {
+            return Ok(None);
+        };
+
+        if !path_entry_type.is_tree() {
+            return Ok(None);
+        }
+
         let (_, metadata_oid) = self
             .git_import
-            .ls(svn_tree_oid, &metadata_path)?
+            .ls(path_entry_oid, METADATA_FILE_NAME)?
             .ok_or_else(|| {
                 tracing::error!(
                     "missing directory metadata for \"{}\"",
@@ -1767,10 +1855,12 @@ impl Stage<'_> {
                 ConvertError
             })?;
         let raw_metadata = self.git_import.get_blob(metadata_oid)?;
-        meta::DirMetadata::deserialize(&raw_metadata).ok_or_else(|| {
-            tracing::error!("failed to deserialize directory metadata");
-            ConvertError
-        })
+        meta::DirMetadata::deserialize(&raw_metadata)
+            .ok_or_else(|| {
+                tracing::error!("failed to deserialize directory metadata");
+                ConvertError
+            })
+            .map(Some)
     }
 }
 
