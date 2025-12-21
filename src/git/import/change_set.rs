@@ -1,5 +1,5 @@
 use gix_hash::ObjectId;
-use gix_object::tree::{EntryKind, EntryMode};
+use gix_object::tree::EntryKind;
 
 use super::{ImportError, Importer};
 use crate::FHashMap;
@@ -11,7 +11,7 @@ pub(crate) struct ChangeSet {
 
 enum EntryChange {
     Remove,
-    Change(EntryMode, ObjectId),
+    Change(EntryKind, ObjectId),
     ChangeTree(FHashMap<Vec<u8>, EntryChange>),
     NewTree(Option<ObjectId>, FHashMap<Vec<u8>, EntryChange>),
 }
@@ -28,8 +28,8 @@ impl ChangeSet {
         self.set_entry(path, EntryChange::Remove);
     }
 
-    pub(crate) fn change(&mut self, path: &[u8], mode: EntryMode, oid: ObjectId) {
-        self.set_entry(path, EntryChange::Change(mode, oid));
+    pub(crate) fn change(&mut self, path: &[u8], kind: EntryKind, oid: ObjectId) {
+        self.set_entry(path, EntryChange::Change(kind, oid));
     }
 
     fn set_entry(&mut self, path: &[u8], value: EntryChange) {
@@ -52,7 +52,7 @@ impl ChangeSet {
                         EntryChange::ChangeTree(sub_tree) | EntryChange::NewTree(_, sub_tree) => {
                             sub_tree
                         }
-                        EntryChange::Change(mode, oid) if mode.is_tree() => {
+                        EntryChange::Change(EntryKind::Tree, oid) => {
                             *entry = EntryChange::NewTree(Some(*oid), FHashMap::default());
                             match entry {
                                 EntryChange::NewTree(_, sub_tree) => sub_tree,
@@ -103,7 +103,12 @@ impl ChangeSet {
             orig_tree
                 .entries
                 .iter()
-                .map(|entry| (entry.filename, (entry.mode, ObjectId::from(entry.oid))))
+                .map(|entry| {
+                    (
+                        entry.filename,
+                        (entry.mode.kind(), ObjectId::from(entry.oid)),
+                    )
+                })
                 .collect()
         } else {
             FHashMap::default()
@@ -115,20 +120,22 @@ impl ChangeSet {
                 EntryChange::Remove => {
                     entries.remove(BStr::new(entry_name));
                 }
-                EntryChange::Change(mode, oid) => {
-                    entries.insert(BStr::new(entry_name), (mode, oid));
+                EntryChange::Change(kind, oid) => {
+                    entries.insert(BStr::new(entry_name), (kind, oid));
                 }
                 EntryChange::ChangeTree(ref sub_tree) => {
-                    let sub_tree_orig_oid = entries
-                        .get(BStr::new(entry_name))
-                        .and_then(|&(mode, oid)| if mode.is_tree() { Some(oid) } else { None });
+                    let sub_tree_orig_oid =
+                        entries.get(BStr::new(entry_name)).and_then(|&(kind, oid)| {
+                            if kind == EntryKind::Tree {
+                                Some(oid)
+                            } else {
+                                None
+                            }
+                        });
                     if let Some(sub_tree_oid) =
                         Self::apply_tree(sub_tree, sub_tree_orig_oid, importer)?
                     {
-                        entries.insert(
-                            BStr::new(entry_name),
-                            (EntryKind::Tree.into(), sub_tree_oid),
-                        );
+                        entries.insert(BStr::new(entry_name), (EntryKind::Tree, sub_tree_oid));
                     } else {
                         entries.remove(BStr::new(entry_name));
                     }
@@ -137,10 +144,7 @@ impl ChangeSet {
                     if let Some(sub_tree_oid) =
                         Self::apply_tree(sub_tree, sub_tree_orig_oid, importer)?
                     {
-                        entries.insert(
-                            BStr::new(entry_name),
-                            (EntryKind::Tree.into(), sub_tree_oid),
-                        );
+                        entries.insert(BStr::new(entry_name), (EntryKind::Tree, sub_tree_oid));
                     } else {
                         entries.remove(BStr::new(entry_name));
                     }
@@ -153,9 +157,9 @@ impl ChangeSet {
         } else {
             let mut entries: Vec<_> = entries
                 .iter()
-                .map(|(name, &(mode, ref oid))| gix_object::tree::EntryRef {
+                .map(|(name, &(kind, ref oid))| gix_object::tree::EntryRef {
                     filename: name,
-                    mode,
+                    mode: kind.into(),
                     oid: oid.as_ref(),
                 })
                 .collect();

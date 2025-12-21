@@ -1,5 +1,5 @@
 use gix_hash::ObjectId;
-use gix_object::tree::{EntryKind, EntryMode};
+use gix_object::tree::EntryKind;
 
 use super::{ConvertError, git_wrap};
 use crate::FHashMap;
@@ -26,7 +26,7 @@ impl TreeBuilder {
     pub(super) fn mod_oid(
         &mut self,
         path: &[u8],
-        mode: EntryMode,
+        kind: EntryKind,
         oid: ObjectId,
         importer: &mut git_wrap::Importer,
     ) -> Result<(), ConvertError> {
@@ -44,20 +44,20 @@ impl TreeBuilder {
         };
 
         node.entries
-            .insert(entry_name.to_vec(), TreeBuilderEntry::Stored(mode, oid));
+            .insert(entry_name.to_vec(), TreeBuilderEntry::Stored(kind, oid));
         Ok(())
     }
 
     pub(super) fn mod_inline(
         &mut self,
         path: &[u8],
-        mode: EntryMode,
+        kind: EntryKind,
         blob: Vec<u8>,
         delta_base: Option<ObjectId>,
         importer: &mut git_wrap::Importer,
     ) -> Result<ObjectId, ConvertError> {
         let blob_oid = importer.put_blob(blob, delta_base)?;
-        self.mod_oid(path, mode, blob_oid, importer)?;
+        self.mod_oid(path, kind, blob_oid, importer)?;
         Ok(blob_oid)
     }
 
@@ -98,7 +98,7 @@ impl TreeBuilder {
         &mut self,
         path: &[u8],
         importer: &mut git_wrap::Importer,
-    ) -> Result<Option<(EntryMode, ObjectId)>, ConvertError> {
+    ) -> Result<Option<(EntryKind, ObjectId)>, ConvertError> {
         if path.is_empty() {
             tracing::error!("attempted to remove root directory");
             return Err(ConvertError);
@@ -109,9 +109,9 @@ impl TreeBuilder {
                 .entries
                 .remove(entry_name)
                 .and_then(|entry| match entry {
-                    TreeBuilderEntry::Stored(mode, oid) => Some((mode, oid)),
+                    TreeBuilderEntry::Stored(kind, oid) => Some((kind, oid)),
                     TreeBuilderEntry::Loaded(sub_node) => {
-                        sub_node.base_oid.map(|oid| (EntryKind::Tree.into(), oid))
+                        sub_node.base_oid.map(|oid| (EntryKind::Tree, oid))
                     }
                 }))
         } else {
@@ -123,7 +123,7 @@ impl TreeBuilder {
         &mut self,
         path: &[u8],
         importer: &mut git_wrap::Importer,
-    ) -> Result<Option<(EntryMode, ObjectId)>, ConvertError> {
+    ) -> Result<Option<(EntryKind, ObjectId)>, ConvertError> {
         if path.is_empty() {
             return Ok(None);
         }
@@ -131,8 +131,8 @@ impl TreeBuilder {
         if let Some((node, entry_name)) = self.find_entry(path, false, importer)? {
             if let Some(entry) = node.entries.get_mut(entry_name) {
                 match *entry {
-                    TreeBuilderEntry::Stored(mode, _) if mode.is_tree() => Ok(None),
-                    TreeBuilderEntry::Stored(mode, oid) => Ok(Some((mode, oid))),
+                    TreeBuilderEntry::Stored(EntryKind::Tree, _) => Ok(None),
+                    TreeBuilderEntry::Stored(kind, oid) => Ok(Some((kind, oid))),
                     TreeBuilderEntry::Loaded(_) => Ok(None),
                 }
             } else {
@@ -227,7 +227,7 @@ impl TreeBuilder {
                     TreeBuilderEntry::Loaded(ref mut sub_node) => {
                         cur_node = sub_node;
                     }
-                    TreeBuilderEntry::Stored(mode, oid) if mode.is_tree() => {
+                    TreeBuilderEntry::Stored(EntryKind::Tree, oid) => {
                         *entry = TreeBuilderEntry::Loaded(Self::read_tree(oid, importer)?);
                         cur_node = match *entry {
                             TreeBuilderEntry::Loaded(ref mut sub_node) => sub_node,
@@ -271,7 +271,7 @@ impl TreeBuilder {
             } else {
                 entries.insert(
                     entry.filename.to_vec(),
-                    TreeBuilderEntry::Stored(entry.mode, entry.oid.into()),
+                    TreeBuilderEntry::Stored(entry.mode.kind(), entry.oid.into()),
                 );
             }
         }
@@ -333,14 +333,12 @@ impl TreeBuilder {
                         oid: sub_tree_oid,
                     });
                 }
-                TreeBuilderEntry::Stored(mode, oid) => {
-                    if !mode.is_tree() || oid != importer.empty_tree_oid() {
-                        entries.push(gix_object::tree::Entry {
-                            mode,
-                            filename: k.as_slice().into(),
-                            oid,
-                        });
-                    }
+                TreeBuilderEntry::Stored(kind, oid) => {
+                    entries.push(gix_object::tree::Entry {
+                        mode: kind.into(),
+                        filename: k.as_slice().into(),
+                        oid,
+                    });
                 }
             }
         }
@@ -360,7 +358,7 @@ enum TreeBuilderRoot {
 
 enum TreeBuilderEntry {
     Loaded(TreeBuilderNode),
-    Stored(EntryMode, ObjectId),
+    Stored(EntryKind, ObjectId),
 }
 
 struct TreeBuilderNode {

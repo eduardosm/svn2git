@@ -1,6 +1,8 @@
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
+use gix_object::tree::EntryKind;
+
 use super::options::{DirClass, Options};
 use super::tree_builder::METADATA_FILE_NAME;
 use super::{ConvertError, git_wrap, meta, tree_builder};
@@ -448,7 +450,7 @@ impl Stage<'_> {
             let mut props = node_record.properties.as_ref();
 
             if node_action == svn::dump::NodeAction::Replace {
-                let (prev_mode, prev_hash) = tree_builder
+                let (prev_kind, prev_hash) = tree_builder
                     .rm(&node_path, self.git_import)?
                     .ok_or_else(|| {
                         tracing::error!(
@@ -459,7 +461,7 @@ impl Stage<'_> {
                     })?;
                 node_ops.push(RootNodeOp {
                     path: node_path.clone(),
-                    action: if prev_mode.is_tree() {
+                    action: if prev_kind == EntryKind::Tree {
                         RootNodeAction::DelDir(prev_hash)
                     } else {
                         RootNodeAction::DelFile
@@ -469,7 +471,7 @@ impl Stage<'_> {
 
             match node_action {
                 svn::dump::NodeAction::Delete => {
-                    let (prev_mode, prev_hash) = tree_builder
+                    let (prev_kind, prev_hash) = tree_builder
                         .rm(&node_path, self.git_import)?
                         .ok_or_else(|| {
                             tracing::error!(
@@ -480,7 +482,7 @@ impl Stage<'_> {
                         })?;
                     node_ops.push(RootNodeOp {
                         path: node_path.clone(),
-                        action: if prev_mode.is_tree() {
+                        action: if prev_kind == EntryKind::Tree {
                             RootNodeAction::DelDir(prev_hash)
                         } else {
                             RootNodeAction::DelFile
@@ -503,7 +505,7 @@ impl Stage<'_> {
                                 return Err(ConvertError);
                             }
 
-                            let (mode, oid) = self
+                            let (kind, oid) = self
                                 .git_import
                                 .ls(
                                     self.root_rev_data[copy_from_rev].svn_tree_oid,
@@ -517,9 +519,9 @@ impl Stage<'_> {
                                     );
                                     ConvertError
                                 })?;
-                            orig_entry = Some((mode, oid));
+                            orig_entry = Some((kind, oid));
                         } else if node_action == svn::dump::NodeAction::Change {
-                            let (mode, oid) = tree_builder
+                            let (kind, oid) = tree_builder
                                 .ls_file(&node_path, self.git_import)?
                                 .ok_or_else(|| {
                                     tracing::error!(
@@ -528,10 +530,10 @@ impl Stage<'_> {
                                     );
                                     ConvertError
                                 })?;
-                            orig_entry = Some((mode, oid));
+                            orig_entry = Some((kind, oid));
                         }
 
-                        let mut props_mode = None::<gix_object::tree::EntryMode>;
+                        let mut props_kind = None;
                         if let Some(props) = props.take() {
                             let special_prop = props.properties.get(b"svn:special".as_slice());
                             let executable_prop =
@@ -540,7 +542,7 @@ impl Stage<'_> {
                                 (Some(Some(_)), _) => {
                                     // "svn:special" present, it is a symlink regardless
                                     // of what happens with "svn:executable"
-                                    props_mode = Some(gix_object::tree::EntryKind::Link.into());
+                                    props_kind = Some(EntryKind::Link);
                                 }
                                 (Some(None), _) => {
                                     // "svn:special" removed, which is not supported
@@ -553,43 +555,43 @@ impl Stage<'_> {
                                     // "svn:executable" added
                                     // In delta mode, "svn:special" might be present
                                     if !props.is_delta
-                                        || !orig_entry.is_some_and(|(m, _)| m.is_link())
+                                        || orig_entry
+                                            .is_none_or(|(kind, _)| kind != EntryKind::Link)
                                     {
-                                        props_mode = Some(
-                                            gix_object::tree::EntryKind::BlobExecutable.into(),
-                                        );
+                                        props_kind = Some(EntryKind::BlobExecutable);
                                     }
                                 }
                                 (None, Some(None)) => {
                                     // "svn:executable" removed
                                     // In delta mode, "svn:special" might be present
                                     if props.is_delta
-                                        && orig_entry.is_some_and(|(m, _)| m.is_link())
+                                        && orig_entry
+                                            .is_some_and(|(kind, _)| kind == EntryKind::Link)
                                     {
                                         // "svn:special" is present
-                                        // keep `orig_mode`
+                                        // keep `orig_kind`
                                     } else {
                                         // "svn:special" not present
-                                        props_mode = Some(gix_object::tree::EntryKind::Blob.into());
+                                        props_kind = Some(EntryKind::Blob);
                                     }
                                 }
                                 (None, None) => {
                                     if props.is_delta {
                                         // neither "svn:special" nor "svn:executable" are changed
-                                        // keep `orig_mode`
+                                        // keep `orig_kind`
                                     } else {
                                         // neither "svn:special" nor "svn:executable" present
-                                        props_mode = Some(gix_object::tree::EntryKind::Blob.into());
+                                        props_kind = Some(EntryKind::Blob);
                                     }
                                 }
                             }
                         }
 
-                        let new_mode = props_mode
+                        let new_kind = props_kind
                             .or(orig_entry.map(|(m, _)| m))
-                            .unwrap_or(gix_object::tree::EntryKind::Blob.into());
-                        if let Some((orig_mode, _)) = orig_entry {
-                            if orig_mode.is_link() && !new_mode.is_link() {
+                            .unwrap_or(EntryKind::Blob);
+                        if let Some((orig_kind, _)) = orig_entry {
+                            if orig_kind == EntryKind::Link && new_kind != EntryKind::Link {
                                 tracing::error!(
                                     "removal of \"svn:special\" property is not supported"
                                 );
@@ -599,9 +601,9 @@ impl Stage<'_> {
 
                         if let Some(node_text) = node_record.text.take() {
                             if node_text.is_delta {
-                                let source = if let Some((orig_mode, orig_oid)) = orig_entry {
+                                let source = if let Some((orig_kind, orig_oid)) = orig_entry {
                                     let mut source = self.git_import.get_blob(orig_oid)?;
-                                    if orig_mode.is_link() {
+                                    if orig_kind == EntryKind::Link {
                                         source.splice(0..0, b"link ".iter().copied());
                                     }
                                     source
@@ -629,7 +631,7 @@ impl Stage<'_> {
                                 };
 
                                 let mut blob_data = result_data;
-                                if new_mode.is_link() {
+                                if new_kind == EntryKind::Link {
                                     if blob_data.starts_with(b"link ") {
                                         blob_data.splice(0..5, []);
                                     } else {
@@ -643,13 +645,13 @@ impl Stage<'_> {
 
                                 tree_builder.mod_inline(
                                     &node_path,
-                                    new_mode,
+                                    new_kind,
                                     blob_data,
                                     orig_entry.map(|(_, orig_blob)| orig_blob),
                                     self.git_import,
                                 )?;
                             } else {
-                                if new_mode.is_link() {
+                                if new_kind == EntryKind::Link {
                                     // strip the "link " prefix in symlinks
                                     if self.svn_dump_reader.remaining_text_len() < 5 {
                                         tracing::error!(
@@ -687,14 +689,15 @@ impl Stage<'_> {
 
                                 tree_builder.mod_inline(
                                     &node_path,
-                                    new_mode,
+                                    new_kind,
                                     blob_data,
                                     orig_entry.map(|(_, orig_blob)| orig_blob),
                                     self.git_import,
                                 )?;
                             }
-                        } else if let Some((orig_mode, orig_oid)) = orig_entry {
-                            let oid = if !orig_mode.is_link() && new_mode.is_link() {
+                        } else if let Some((orig_kind, orig_oid)) = orig_entry {
+                            let oid = if orig_kind != EntryKind::Link && new_kind == EntryKind::Link
+                            {
                                 let mut orig_data = self.git_import.get_blob(orig_oid)?;
                                 if !orig_data.starts_with(b"link ") {
                                     // strip the "link " prefix in symlinks
@@ -709,7 +712,7 @@ impl Stage<'_> {
                             } else {
                                 orig_oid
                             };
-                            tree_builder.mod_oid(&node_path, new_mode, oid, self.git_import)?;
+                            tree_builder.mod_oid(&node_path, new_kind, oid, self.git_import)?;
                         } else {
                             tracing::error!("missing file content in SVN dump node");
                             return Err(ConvertError);
@@ -797,7 +800,7 @@ impl Stage<'_> {
                                 action: RootNodeAction::ModDir(metadata_oid.is_some()),
                             });
                         } else if let Some((copy_from_rev, copy_from_path)) = copy_from.take() {
-                            let (copy_from_mode, copy_from_oid) = self
+                            let (copy_from_kind, copy_from_oid) = self
                                 .git_import
                                 .ls(
                                     self.root_rev_data[copy_from_rev].svn_tree_oid,
@@ -812,7 +815,7 @@ impl Stage<'_> {
                                     ConvertError
                                 })?;
 
-                            if !copy_from_mode.is_tree() {
+                            if copy_from_kind != EntryKind::Tree {
                                 tracing::error!(
                                     "\"{}\" at rev {} is expected to be a directory",
                                     copy_from_path.escape_ascii(),
@@ -822,7 +825,7 @@ impl Stage<'_> {
                             }
                             tree_builder.mod_oid(
                                 &node_path,
-                                copy_from_mode,
+                                copy_from_kind,
                                 copy_from_oid,
                                 self.git_import,
                             )?;
@@ -938,7 +941,7 @@ impl Stage<'_> {
             if !gitignore_data.is_empty() {
                 let gitignore_oid = git_import.put_blob(gitignore_data, None)?;
                 git_tree_entries.push(gix_object::tree::Entry {
-                    mode: gix_object::tree::EntryKind::Blob.into(),
+                    mode: EntryKind::Blob.into(),
                     filename: b".gitignore".into(),
                     oid: gitignore_oid,
                 });
@@ -1063,7 +1066,7 @@ impl Stage<'_> {
                                 }
 
                                 let item_path = concat_path(&node_op.path, &dir_entry.filename);
-                                let (item_mode, item_hash) = self
+                                let (item_kind, item_hash) = self
                                     .git_import
                                     .ls(
                                         self.root_rev_data.last().unwrap().svn_tree_oid,
@@ -1078,7 +1081,7 @@ impl Stage<'_> {
                                     })?;
                                 pending.push_front(RootNodeOp {
                                     path: item_path,
-                                    action: if item_mode.is_tree() {
+                                    action: if item_kind == EntryKind::Tree {
                                         RootNodeAction::DelDir(item_hash)
                                     } else {
                                         RootNodeAction::DelFile
@@ -1289,7 +1292,7 @@ impl Stage<'_> {
                 UnbranchedNodeAction::ModFile => {
                     match Self::file_special_handling(self.options, entry_name) {
                         SpecialHandling::None => {
-                            let (mode, blob) = self
+                            let (kind, blob) = self
                                 .git_import
                                 .ls(self.root_rev_data[root_rev].svn_tree_oid, &op.path)?
                                 .ok_or_else(|| {
@@ -1299,7 +1302,7 @@ impl Stage<'_> {
                                     );
                                     ConvertError
                                 })?;
-                            change_set.change(&op.path, mode, blob);
+                            change_set.change(&op.path, kind, blob);
                         }
                         SpecialHandling::Ignore => {}
                         SpecialHandling::CustomReplace => {}
@@ -1317,11 +1320,11 @@ impl Stage<'_> {
                 }
                 UnbranchedNodeAction::CopyDir(has_metadata, copy_from_rev, ref copy_from_path) => {
                     if !Self::ignore_directory(entry_name) {
-                        if let Some((copy_from_mode, copy_from_oid)) = self.git_import.ls(
+                        if let Some((copy_from_kind, copy_from_oid)) = self.git_import.ls(
                             self.root_rev_data[copy_from_rev].svn_tree_oid,
                             copy_from_path,
                         )? {
-                            if !copy_from_mode.is_tree() {
+                            if copy_from_kind != EntryKind::Tree {
                                 tracing::error!(
                                     "\"{}\" at rev {} is expected to be a directory",
                                     copy_from_path.escape_ascii(),
@@ -1331,7 +1334,7 @@ impl Stage<'_> {
                             }
                             let copy_from_oid = self.tree_map[&copy_from_oid];
                             if let Some(copy_from_oid) = copy_from_oid {
-                                change_set.change(&op.path, copy_from_mode, copy_from_oid);
+                                change_set.change(&op.path, copy_from_kind, copy_from_oid);
                             } else {
                                 change_set.remove(&op.path);
                             }
@@ -1358,11 +1361,11 @@ impl Stage<'_> {
                 let git_dir_oid = self.tree_map[&svn_dir_oid];
 
                 let gitignore_path = concat_path(&op.path, b".gitignore");
-                if let Some((mode, blob)) = git_dir_oid
+                if let Some((kind, blob)) = git_dir_oid
                     .and_then(|dir_oid| self.git_import.ls(dir_oid, b".gitignore").transpose())
                     .transpose()?
                 {
-                    change_set.change(&gitignore_path, mode, blob);
+                    change_set.change(&gitignore_path, kind, blob);
                 } else {
                     change_set.remove(&gitignore_path);
                 }
@@ -1569,11 +1572,11 @@ impl Stage<'_> {
             branch_data.rev_map.push((root_commit, branch_rev));
 
             let tail_commit = parent_commit.map_or(branch_rev, |p| self.branch_rev_data[p].tail);
-            let tree_oid = if let Some((mode, svn_tree_oid)) = self
+            let tree_oid = if let Some((kind, svn_tree_oid)) = self
                 .git_import
                 .ls(self.root_rev_data[root_commit].svn_tree_oid, branch_path)?
             {
-                if !mode.is_tree() {
+                if kind != EntryKind::Tree {
                     tracing::error!("branch root is not a tree");
                     return Err(ConvertError);
                 }
@@ -1584,7 +1587,7 @@ impl Stage<'_> {
                     let parent_tree_oid = self.branch_rev_data[parent_commit.unwrap()].tree_oid;
                     let mut change_set = crate::git::ChangeSet::new(Some(parent_tree_oid));
                     if let Some(git_tree_oid) = git_tree_oid {
-                        change_set.change(&branch_data.partial_sub_path, mode, git_tree_oid);
+                        change_set.change(&branch_data.partial_sub_path, kind, git_tree_oid);
                     } else {
                         change_set.remove(&branch_data.partial_sub_path);
                     }
@@ -1868,12 +1871,11 @@ impl Stage<'_> {
         svn_tree_oid: gix_hash::ObjectId,
         dir_path: &[u8],
     ) -> Result<Option<meta::DirMetadata>, ConvertError> {
-        let Some((path_entry_type, path_entry_oid)) = self.git_import.ls(svn_tree_oid, dir_path)?
+        let Some((path_entry_kind, path_entry_oid)) = self.git_import.ls(svn_tree_oid, dir_path)?
         else {
             return Ok(None);
         };
-
-        if !path_entry_type.is_tree() {
+        if path_entry_kind != EntryKind::Tree {
             return Ok(None);
         }
 
