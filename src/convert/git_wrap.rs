@@ -94,7 +94,7 @@ impl Importer {
         &self,
         root_oid: gix_hash::ObjectId,
         path: &[u8],
-    ) -> Result<Option<(gix_object::tree::EntryMode, gix_hash::ObjectId)>, ConvertError> {
+    ) -> Result<Option<(gix_object::tree::EntryKind, gix_hash::ObjectId)>, ConvertError> {
         self.importer.ls(root_oid, path).map_err(|e| {
             tracing::error!(
                 "failed to ls \"{}\" at {root_oid}: {e}",

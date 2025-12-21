@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, VecDeque};
 use std::io::Write as _;
 
 use gix_hash::ObjectId;
-use gix_object::tree::{EntryKind, EntryMode};
+use gix_object::tree::EntryKind;
 use gix_object::{Object, ObjectRef};
 
 use crate::{FHashMap, FHashSet};
@@ -273,16 +273,16 @@ impl Importer {
         &self,
         root_oid: ObjectId,
         path: &[u8],
-    ) -> Result<Option<(EntryMode, ObjectId)>, ImportError> {
+    ) -> Result<Option<(EntryKind, ObjectId)>, ImportError> {
         if path.is_empty() {
-            return Ok(Some((EntryKind::Tree.into(), root_oid)));
+            return Ok(Some((EntryKind::Tree, root_oid)));
         }
 
-        let mut cur_mode = EntryMode::from(EntryKind::Tree);
+        let mut cur_kind = EntryKind::Tree;
         let mut cur_oid = root_oid;
 
         for entry_name in path.split(|&c| c == b'/') {
-            if !cur_mode.is_tree() {
+            if cur_kind != EntryKind::Tree {
                 return Ok(None);
             }
 
@@ -302,14 +302,14 @@ impl Importer {
                 .iter()
                 .find(|entry| entry.filename == entry_name)
             {
-                cur_mode = entry.mode;
+                cur_kind = entry.mode.kind();
                 cur_oid = entry.oid.into();
             } else {
                 return Ok(None);
             }
         }
 
-        Ok(Some((cur_mode, cur_oid)))
+        Ok(Some((cur_kind, cur_oid)))
     }
 
     pub(crate) fn set_head(&mut self, head_ref: &str) {
