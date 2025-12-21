@@ -44,6 +44,9 @@ pub(crate) enum ImportError {
         dest_path: std::path::PathBuf,
         error: std::io::Error,
     },
+    Sha1Collision {
+        hash: ObjectId,
+    },
 }
 
 impl std::error::Error for ImportError {}
@@ -97,6 +100,17 @@ impl std::fmt::Display for ImportError {
                     "failed to rename {source_path:?} to {dest_path:?}: {error}"
                 )
             }
+            Self::Sha1Collision { hash } => {
+                write!(f, "SHA-1 collision attack with hash {hash}")
+            }
+        }
+    }
+}
+
+fn convert_hash_error(error: gix_hash::hasher::Error) -> ImportError {
+    match error {
+        gix_hash::hasher::Error::CollisionAttack { digest } => {
+            ImportError::Sha1Collision { hash: digest }
         }
     }
 }
@@ -202,8 +216,8 @@ impl Importer {
         let mut raw_obj = Vec::new();
         gix_object::WriteTo::write_to(&object, &mut raw_obj).unwrap();
 
-        let obj_id = gix_object::compute_hash(hash_kind, obj_kind, &raw_obj)
-            .expect("SHA-1 collision attack detected");
+        let obj_id =
+            gix_object::compute_hash(hash_kind, obj_kind, &raw_obj).map_err(convert_hash_error)?;
 
         temp_storage.insert_raw(obj_id, obj_kind, raw_obj, delta_base)?;
 
@@ -216,7 +230,7 @@ impl Importer {
         delta_base: Option<ObjectId>,
     ) -> Result<ObjectId, ImportError> {
         let obj_id = gix_object::compute_hash(self.hash_kind, gix_object::Kind::Blob, &data)
-            .expect("SHA-1 collision attack detected");
+            .map_err(convert_hash_error)?;
 
         self.temp_storage
             .insert_raw(obj_id, gix_object::Kind::Blob, data, delta_base)?;
@@ -529,7 +543,7 @@ fn write_pack_data(
     let pack_hash = pack_data_file
         .hash
         .try_finalize()
-        .expect("SHA-1 collision attack detected");
+        .map_err(convert_hash_error)?;
 
     let pack_data_file = pack_data_file.inner;
     file_write_all(&pack_data_file, &pack_data_tmp_path, pack_hash.as_bytes())?;
@@ -636,7 +650,7 @@ fn write_pack_index(
     let index_hash = pack_index_file
         .hash
         .try_finalize()
-        .expect("SHA-1 collision attack detected");
+        .map_err(convert_hash_error)?;
     let mut pack_index_file = pack_index_file.inner;
 
     file_write_all(
