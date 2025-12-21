@@ -13,13 +13,13 @@ pub(super) struct TreeBuilder {
 impl TreeBuilder {
     pub(super) fn new(root_metadata: ObjectId) -> Self {
         Self {
-            root: TreeBuilderRoot::Tree(TreeBuilderNode::empty(root_metadata)),
+            root: TreeBuilderRoot::Loaded(TreeBuilderNode::empty(root_metadata)),
         }
     }
 
     pub(super) fn with_base(base: ObjectId) -> Self {
         Self {
-            root: TreeBuilderRoot::Ext(base),
+            root: TreeBuilderRoot::Stored(base),
         }
     }
 
@@ -44,7 +44,7 @@ impl TreeBuilder {
         };
 
         node.entries
-            .insert(entry_name.to_vec(), TreeBuilderEntry::Entry(mode, oid));
+            .insert(entry_name.to_vec(), TreeBuilderEntry::Stored(mode, oid));
         Ok(())
     }
 
@@ -81,7 +81,7 @@ impl TreeBuilder {
         };
         match node.entries.entry(entry_name.to_vec()) {
             std::collections::hash_map::Entry::Vacant(v) => {
-                v.insert(TreeBuilderEntry::SubTree(TreeBuilderNode::empty(metadata)));
+                v.insert(TreeBuilderEntry::Loaded(TreeBuilderNode::empty(metadata)));
                 Ok(())
             }
             std::collections::hash_map::Entry::Occupied(_) => {
@@ -109,8 +109,8 @@ impl TreeBuilder {
                 .entries
                 .remove(entry_name)
                 .and_then(|entry| match entry {
-                    TreeBuilderEntry::Entry(mode, oid) => Some((mode, oid)),
-                    TreeBuilderEntry::SubTree(sub_node) => {
+                    TreeBuilderEntry::Stored(mode, oid) => Some((mode, oid)),
+                    TreeBuilderEntry::Loaded(sub_node) => {
                         sub_node.base_oid.map(|oid| (EntryKind::Tree.into(), oid))
                     }
                 }))
@@ -131,9 +131,9 @@ impl TreeBuilder {
         if let Some((node, entry_name)) = self.find_entry(path, false, importer)? {
             if let Some(entry) = node.entries.get_mut(entry_name) {
                 match *entry {
-                    TreeBuilderEntry::Entry(mode, _) if mode.is_tree() => Ok(None),
-                    TreeBuilderEntry::Entry(mode, oid) => Ok(Some((mode, oid))),
-                    TreeBuilderEntry::SubTree(_) => Ok(None),
+                    TreeBuilderEntry::Stored(mode, _) if mode.is_tree() => Ok(None),
+                    TreeBuilderEntry::Stored(mode, oid) => Ok(Some((mode, oid))),
+                    TreeBuilderEntry::Loaded(_) => Ok(None),
                 }
             } else {
                 Ok(None)
@@ -210,13 +210,13 @@ impl TreeBuilder {
         modify: bool,
         importer: &mut git_wrap::Importer,
     ) -> Result<Option<&'a mut TreeBuilderNode>, ConvertError> {
-        if let TreeBuilderRoot::Ext(tree_oid) = self.root {
-            self.root = TreeBuilderRoot::Tree(Self::read_tree(tree_oid, importer)?);
+        if let TreeBuilderRoot::Stored(tree_oid) = self.root {
+            self.root = TreeBuilderRoot::Loaded(Self::read_tree(tree_oid, importer)?);
         }
 
         let mut cur_node = match self.root {
-            TreeBuilderRoot::Tree(ref mut node) => node,
-            TreeBuilderRoot::Ext(_) => unreachable!(),
+            TreeBuilderRoot::Loaded(ref mut node) => node,
+            TreeBuilderRoot::Stored(_) => unreachable!(),
         };
 
         for component in components {
@@ -224,17 +224,17 @@ impl TreeBuilder {
             if cur_node.entries.contains_key(component) {
                 let entry = cur_node.entries.get_mut(component).unwrap();
                 match *entry {
-                    TreeBuilderEntry::SubTree(ref mut sub_node) => {
+                    TreeBuilderEntry::Loaded(ref mut sub_node) => {
                         cur_node = sub_node;
                     }
-                    TreeBuilderEntry::Entry(mode, oid) if mode.is_tree() => {
-                        *entry = TreeBuilderEntry::SubTree(Self::read_tree(oid, importer)?);
+                    TreeBuilderEntry::Stored(mode, oid) if mode.is_tree() => {
+                        *entry = TreeBuilderEntry::Loaded(Self::read_tree(oid, importer)?);
                         cur_node = match *entry {
-                            TreeBuilderEntry::SubTree(ref mut sub_node) => sub_node,
-                            TreeBuilderEntry::Entry(..) => unreachable!(),
+                            TreeBuilderEntry::Loaded(ref mut sub_node) => sub_node,
+                            TreeBuilderEntry::Stored(..) => unreachable!(),
                         };
                     }
-                    TreeBuilderEntry::Entry(..) => {
+                    TreeBuilderEntry::Stored(..) => {
                         return Ok(None);
                     }
                 }
@@ -271,7 +271,7 @@ impl TreeBuilder {
             } else {
                 entries.insert(
                     entry.filename.to_vec(),
-                    TreeBuilderEntry::Entry(entry.mode, entry.oid.into()),
+                    TreeBuilderEntry::Stored(entry.mode, entry.oid.into()),
                 );
             }
         }
@@ -295,8 +295,8 @@ impl TreeBuilder {
         ) -> Result<(), ConvertError>,
     ) -> Result<ObjectId, ConvertError> {
         match self.root {
-            TreeBuilderRoot::Tree(ref node) => Self::build_node(node, importer, &mut cb),
-            TreeBuilderRoot::Ext(tree_oid) => Ok(tree_oid),
+            TreeBuilderRoot::Loaded(ref node) => Self::build_node(node, importer, &mut cb),
+            TreeBuilderRoot::Stored(tree_oid) => Ok(tree_oid),
         }
     }
 
@@ -325,7 +325,7 @@ impl TreeBuilder {
 
         for (k, v) in node.entries.iter() {
             match *v {
-                TreeBuilderEntry::SubTree(ref sub_node) => {
+                TreeBuilderEntry::Loaded(ref sub_node) => {
                     let sub_tree_oid = Self::build_node(sub_node, importer, cb)?;
                     entries.push(gix_object::tree::Entry {
                         mode: EntryKind::Tree.into(),
@@ -333,7 +333,7 @@ impl TreeBuilder {
                         oid: sub_tree_oid,
                     });
                 }
-                TreeBuilderEntry::Entry(mode, oid) => {
+                TreeBuilderEntry::Stored(mode, oid) => {
                     if !mode.is_tree() || oid != importer.empty_tree_oid() {
                         entries.push(gix_object::tree::Entry {
                             mode,
@@ -354,13 +354,13 @@ impl TreeBuilder {
 }
 
 enum TreeBuilderRoot {
-    Tree(TreeBuilderNode),
-    Ext(ObjectId),
+    Loaded(TreeBuilderNode),
+    Stored(ObjectId),
 }
 
 enum TreeBuilderEntry {
-    SubTree(TreeBuilderNode),
-    Entry(EntryMode, ObjectId),
+    Loaded(TreeBuilderNode),
+    Stored(EntryMode, ObjectId),
 }
 
 struct TreeBuilderNode {
