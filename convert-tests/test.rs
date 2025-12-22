@@ -490,8 +490,11 @@ fn check_git_tag(git_repo: &gix::Repository, git_tag: &defs::GitTag) -> Result<(
     }
 
     if let Some(ref expected_tagger) = git_tag.tagger {
-        let tagger = tag.tagger.as_ref().ok_or("tag does not have tagger")?;
-        check_git_signature("tagger", tagger, expected_tagger)?;
+        let tagger = tag
+            .tagger()
+            .map_err(|_| format!("invalid tag tagger: {:?}", tag.tagger))?
+            .ok_or("tag does not have tagger")?;
+        check_git_signature("tagger", &tagger, expected_tagger)?;
     }
 
     if let Some(ref expected_msg) = git_tag.message {

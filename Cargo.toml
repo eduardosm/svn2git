@@ -25,23 +25,23 @@ crossterm = "0.29.0"
 cyclic-poly-23 = "0.4.0"
 flate2 = "1.1.5"
 foldhash = "0.2.0"
-gix-actor = "0.36.0"
-gix-date = "0.11.0"
-gix-features = "0.44.1"
-gix-hash = "0.20.1"
-gix-object = "0.52.0"
-gix-pack = "0.62.0"
+gix-actor = "0.36.1"
+gix-date = "0.11.1"
+gix-features = "0.45.0"
+gix-hash = "0.21.0"
+gix-object = "0.53.0"
+gix-pack = "0.63.0"
 indoc = "2.0.7"
 liblzma = { version = "0.4.5", features = ["static"] }
 lru-mem = "0.3.0"
 lz4_flex = "0.12.0"
-minijinja = "2.12.0"
+minijinja = "2.14.0"
 serde = { version = "1.0.228", features = ["derive"] }
 smallvec = "1.15.1"
-toml = "0.9.8"
-tracing = "0.1.43"
+toml = "0.9.10"
+tracing = "0.1.44"
 tracing-subscriber = "0.3.22"
-uuid = "1.18.1"
+uuid = "1.19.0"
 zstd = "0.13.3"
 
 [dependencies.regex-automata]
@@ -55,7 +55,7 @@ default-features = false
 features = ["std"]
 
 [dev-dependencies]
-gix = "0.75.0"
+gix = "0.76.0"
 libtest-mimic = "0.8.1"
 rand = "0.9.2"
 serde_yaml = "0.9.34"
