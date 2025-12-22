@@ -2,8 +2,8 @@ use std::collections::{BTreeMap, VecDeque};
 use std::io::Write as _;
 
 use gix_hash::ObjectId;
+use gix_object::ObjectRef;
 use gix_object::tree::EntryKind;
-use gix_object::{Object, ObjectRef};
 
 use crate::{FHashMap, FHashSet};
 
@@ -239,23 +239,6 @@ impl Importer {
 
     pub(crate) fn get_raw(&self, id: ObjectId) -> Result<(gix_object::Kind, Vec<u8>), ImportError> {
         self.temp_storage.get_raw(id)
-    }
-
-    pub(crate) fn get<T: TryFrom<Object, Error = Object>>(
-        &self,
-        id: ObjectId,
-    ) -> Result<T, ImportError> {
-        let (obj_kind, raw_obj) = self.temp_storage.get_raw(id)?;
-
-        let obj = ObjectRef::from_bytes(obj_kind, &raw_obj)
-            .unwrap_or_else(|_| {
-                panic!("failed to parse object {id}");
-            })
-            .into_owned();
-
-        Ok(T::try_from(obj).unwrap_or_else(|obj| {
-            panic!("unexpected object kind for {id}: {}", obj.kind());
-        }))
     }
 
     pub(crate) fn get_blob(&self, id: ObjectId) -> Result<Vec<u8>, ImportError> {

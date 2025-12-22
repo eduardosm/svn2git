@@ -1,8 +1,10 @@
 use crate::FHashMap;
 
-#[derive(Default)]
+use super::bin_ser_de::{self, DeserializeError};
+
+#[derive(Clone, Default)]
 pub(super) struct DirMetadata {
-    pub(super) ignores: Vec<u8>,
+    pub(super) ignore: Vec<u8>,
     pub(super) global_ignores: Vec<u8>,
     pub(super) mergeinfo: Vec<u8>,
     pub(super) svnmerge_integrated: Vec<u8>,
@@ -16,9 +18,9 @@ impl DirMetadata {
         let mut new_meta = prev_meta.unwrap_or_default();
 
         if let Some(prop_value) = props.get(b"svn:ignore".as_slice()) {
-            new_meta.ignores.clear();
+            new_meta.ignore.clear();
             if let Some(prop_value) = prop_value {
-                new_meta.ignores.extend(prop_value);
+                new_meta.ignore.extend(prop_value);
             }
         }
 
@@ -50,54 +52,37 @@ impl DirMetadata {
 
     pub(super) fn serialize(&self) -> Vec<u8> {
         let mut out = Vec::new();
-        Self::serialize_byte_slice(&self.ignores, &mut out);
-        Self::serialize_byte_slice(&self.global_ignores, &mut out);
-        Self::serialize_byte_slice(&self.mergeinfo, &mut out);
-        Self::serialize_byte_slice(&self.svnmerge_integrated, &mut out);
+        self.serialize_into(&mut out);
         out
     }
 
-    pub(super) fn deserialize(raw: &[u8]) -> Option<Self> {
-        let mut src = raw;
+    pub(super) fn serialize_into(&self, out: &mut Vec<u8>) {
+        bin_ser_de::serialize_byte_slice_into(&self.ignore, out);
+        bin_ser_de::serialize_byte_slice_into(&self.global_ignores, out);
+        bin_ser_de::serialize_byte_slice_into(&self.mergeinfo, out);
+        bin_ser_de::serialize_byte_slice_into(&self.svnmerge_integrated, out);
+    }
 
-        let ignores = Self::deserialize_byte_slice(&mut src)?;
-        let global_ignores = Self::deserialize_byte_slice(&mut src)?;
-        let mergeinfo = Self::deserialize_byte_slice(&mut src)?;
-        let mergeinfo_integrated = Self::deserialize_byte_slice(&mut src)?;
-
+    pub(super) fn deserialize(mut src: &[u8]) -> Result<Self, DeserializeError> {
+        let r = Self::deserialize_from(&mut src)?;
         if !src.is_empty() {
-            return None;
+            return Err(DeserializeError);
         }
+        Ok(r)
+    }
 
-        Some(Self {
-            ignores,
+    pub(super) fn deserialize_from(src: &mut &[u8]) -> Result<Self, DeserializeError> {
+        let ignore = bin_ser_de::deserialize_byte_slice_from(src)?;
+        let global_ignores = bin_ser_de::deserialize_byte_slice_from(src)?;
+        let mergeinfo = bin_ser_de::deserialize_byte_slice_from(src)?;
+        let mergeinfo_integrated = bin_ser_de::deserialize_byte_slice_from(src)?;
+
+        Ok(Self {
+            ignore,
             global_ignores,
             mergeinfo,
             svnmerge_integrated: mergeinfo_integrated,
         })
-    }
-
-    fn serialize_byte_slice(bytes: &[u8], dst: &mut Vec<u8>) {
-        dst.extend(bytes.len().to_ne_bytes());
-        dst.extend(bytes);
-    }
-
-    fn deserialize_byte_array<const N: usize>(src: &mut &[u8]) -> Option<[u8; N]> {
-        let array;
-        (array, *src) = src.split_first_chunk()?;
-        Some(*array)
-    }
-
-    fn deserialize_byte_slice(src: &mut &[u8]) -> Option<Vec<u8>> {
-        let len = usize::from_ne_bytes(Self::deserialize_byte_array(src)?);
-
-        if src.len() < len {
-            return None;
-        }
-        let data;
-        (data, *src) = src.split_at(len);
-
-        Some(data.to_vec())
     }
 }
 
