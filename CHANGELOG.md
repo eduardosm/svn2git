@@ -6,6 +6,11 @@
 
 - The `delete-files` option now matches file names instead of full paths.
 
+### Added
+
+- Support for partial branches. Partial branches are created by copying a subdirectory
+  instead of the root of a branch. This feature is experimental.
+
 ### Fixed
 
 - Files and directories named `.svn` and `.git` are now allowed to appear in the
