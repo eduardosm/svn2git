@@ -1,10 +1,7 @@
 use gix_hash::ObjectId;
-use gix_object::tree::EntryKind;
 
-use super::{ConvertError, git_wrap};
+use super::{ConvertError, git_wrap, svn_tree};
 use crate::FHashMap;
-
-pub(super) const METADATA_FILE_NAME: &[u8] = b".";
 
 pub(super) struct TreeBuilder {
     root: TreeBuilderRoot,
@@ -23,11 +20,10 @@ impl TreeBuilder {
         }
     }
 
-    pub(super) fn mod_oid(
+    pub(super) fn mod_entry(
         &mut self,
         path: &[u8],
-        kind: EntryKind,
-        oid: ObjectId,
+        entry: svn_tree::NodeEntry,
         importer: &mut git_wrap::Importer,
     ) -> Result<(), ConvertError> {
         if path.is_empty() {
@@ -44,20 +40,29 @@ impl TreeBuilder {
         };
 
         node.entries
-            .insert(entry_name.to_vec(), TreeBuilderEntry::Stored(kind, oid));
+            .insert(entry_name.to_vec(), TreeBuilderEntry::Entry(entry));
         Ok(())
     }
 
     pub(super) fn mod_inline(
         &mut self,
         path: &[u8],
-        kind: EntryKind,
+        special: svn_tree::FileSpecial,
+        executable: bool,
         blob: Vec<u8>,
         delta_base: Option<ObjectId>,
         importer: &mut git_wrap::Importer,
     ) -> Result<ObjectId, ConvertError> {
         let blob_oid = importer.put_blob(blob, delta_base)?;
-        self.mod_oid(path, kind, blob_oid, importer)?;
+        self.mod_entry(
+            path,
+            svn_tree::NodeEntry::File {
+                special,
+                executable,
+                oid: blob_oid,
+            },
+            importer,
+        )?;
         Ok(blob_oid)
     }
 
@@ -81,7 +86,7 @@ impl TreeBuilder {
         };
         match node.entries.entry(entry_name.to_vec()) {
             std::collections::hash_map::Entry::Vacant(v) => {
-                v.insert(TreeBuilderEntry::Loaded(TreeBuilderNode::empty(metadata)));
+                v.insert(TreeBuilderEntry::SubTree(TreeBuilderNode::empty(metadata)));
                 Ok(())
             }
             std::collections::hash_map::Entry::Occupied(_) => {
@@ -98,7 +103,7 @@ impl TreeBuilder {
         &mut self,
         path: &[u8],
         importer: &mut git_wrap::Importer,
-    ) -> Result<Option<(EntryKind, ObjectId)>, ConvertError> {
+    ) -> Result<Option<svn_tree::NodeEntry>, ConvertError> {
         if path.is_empty() {
             tracing::error!("attempted to remove root directory");
             return Err(ConvertError);
@@ -109,10 +114,10 @@ impl TreeBuilder {
                 .entries
                 .remove(entry_name)
                 .and_then(|entry| match entry {
-                    TreeBuilderEntry::Stored(kind, oid) => Some((kind, oid)),
-                    TreeBuilderEntry::Loaded(sub_node) => {
-                        sub_node.base_oid.map(|oid| (EntryKind::Tree, oid))
+                    TreeBuilderEntry::SubTree(sub_node) => {
+                        sub_node.base_oid.map(svn_tree::NodeEntry::Dir)
                     }
+                    TreeBuilderEntry::Entry(entry) => Some(entry),
                 }))
         } else {
             Ok(None)
@@ -123,7 +128,7 @@ impl TreeBuilder {
         &mut self,
         path: &[u8],
         importer: &mut git_wrap::Importer,
-    ) -> Result<Option<(EntryKind, ObjectId)>, ConvertError> {
+    ) -> Result<Option<svn_tree::NodeEntry>, ConvertError> {
         if path.is_empty() {
             return Ok(None);
         }
@@ -131,9 +136,9 @@ impl TreeBuilder {
         if let Some((node, entry_name)) = self.find_entry(path, false, importer)? {
             if let Some(entry) = node.entries.get_mut(entry_name) {
                 match *entry {
-                    TreeBuilderEntry::Stored(EntryKind::Tree, _) => Ok(None),
-                    TreeBuilderEntry::Stored(kind, oid) => Ok(Some((kind, oid))),
-                    TreeBuilderEntry::Loaded(_) => Ok(None),
+                    TreeBuilderEntry::SubTree(_) => Ok(None),
+                    TreeBuilderEntry::Entry(svn_tree::NodeEntry::Dir(_)) => Ok(None),
+                    TreeBuilderEntry::Entry(entry) => Ok(Some(entry)),
                 }
             } else {
                 Ok(None)
@@ -224,17 +229,17 @@ impl TreeBuilder {
             if cur_node.entries.contains_key(component) {
                 let entry = cur_node.entries.get_mut(component).unwrap();
                 match *entry {
-                    TreeBuilderEntry::Loaded(ref mut sub_node) => {
+                    TreeBuilderEntry::SubTree(ref mut sub_node) => {
                         cur_node = sub_node;
                     }
-                    TreeBuilderEntry::Stored(EntryKind::Tree, oid) => {
-                        *entry = TreeBuilderEntry::Loaded(Self::read_tree(oid, importer)?);
+                    TreeBuilderEntry::Entry(svn_tree::NodeEntry::Dir(oid)) => {
+                        *entry = TreeBuilderEntry::SubTree(Self::read_tree(oid, importer)?);
                         cur_node = match *entry {
-                            TreeBuilderEntry::Loaded(ref mut sub_node) => sub_node,
-                            TreeBuilderEntry::Stored(..) => unreachable!(),
+                            TreeBuilderEntry::SubTree(ref mut sub_node) => sub_node,
+                            TreeBuilderEntry::Entry(..) => unreachable!(),
                         };
                     }
-                    TreeBuilderEntry::Stored(..) => {
+                    TreeBuilderEntry::Entry(..) => {
                         return Ok(None);
                     }
                 }
@@ -251,35 +256,22 @@ impl TreeBuilder {
         tree_oid: ObjectId,
         importer: &mut git_wrap::Importer,
     ) -> Result<TreeBuilderNode, ConvertError> {
-        let (obj_kind, raw_obj) = importer.get_raw(tree_oid)?;
-        assert_eq!(
-            obj_kind,
-            gix_object::Kind::Tree,
-            "unexpected object kind for {tree_oid}",
-        );
-        let tree = gix_object::TreeRef::from_bytes(&raw_obj).unwrap_or_else(|_| {
-            panic!("failed to parse object {tree_oid}");
+        let (_, raw_tree) = importer.get_raw(tree_oid)?;
+        let tree = svn_tree::Node::deserialize(&raw_tree).unwrap_or_else(|_| {
+            panic!("failed to parse tree {tree_oid}");
         });
 
         let base_oid = (!tree.entries.is_empty()).then_some(tree_oid);
-        let mut metadata = None;
         let mut entries =
             FHashMap::with_capacity_and_hasher(tree.entries.len(), Default::default());
-        for entry in tree.entries {
-            if entry.filename == METADATA_FILE_NAME {
-                metadata = Some(entry.oid.into());
-            } else {
-                entries.insert(
-                    entry.filename.to_vec(),
-                    TreeBuilderEntry::Stored(entry.mode.kind(), entry.oid.into()),
-                );
-            }
+        for (entry_name, entry) in tree.entries {
+            entries.insert(entry_name, TreeBuilderEntry::Entry(entry));
         }
 
         Ok(TreeBuilderNode {
             modified: false,
             base_oid,
-            metadata: metadata.expect("missing directory metadata"),
+            metadata: tree.metadata,
             entries,
         })
     }
@@ -289,7 +281,7 @@ impl TreeBuilder {
         importer: &mut git_wrap::Importer,
         mut cb: impl FnMut(
             ObjectId,
-            &gix_object::Tree,
+            &svn_tree::Node,
             Option<ObjectId>,
             &mut git_wrap::Importer,
         ) -> Result<(), ConvertError>,
@@ -305,7 +297,7 @@ impl TreeBuilder {
         importer: &mut git_wrap::Importer,
         cb: &mut impl FnMut(
             ObjectId,
-            &gix_object::Tree,
+            &svn_tree::Node,
             Option<ObjectId>,
             &mut git_wrap::Importer,
         ) -> Result<(), ConvertError>,
@@ -317,35 +309,25 @@ impl TreeBuilder {
         }
 
         let mut entries = Vec::new();
-        entries.push(gix_object::tree::Entry {
-            mode: EntryKind::Blob.into(),
-            filename: METADATA_FILE_NAME.into(),
-            oid: node.metadata,
-        });
-
         for (k, v) in node.entries {
             match v {
-                TreeBuilderEntry::Loaded(sub_node) => {
+                TreeBuilderEntry::SubTree(sub_node) => {
                     let sub_tree_oid = Self::build_node(sub_node, importer, cb)?;
-                    entries.push(gix_object::tree::Entry {
-                        mode: EntryKind::Tree.into(),
-                        filename: k.as_slice().into(),
-                        oid: sub_tree_oid,
-                    });
+                    entries.push((k, svn_tree::NodeEntry::Dir(sub_tree_oid)));
                 }
-                TreeBuilderEntry::Stored(kind, oid) => {
-                    entries.push(gix_object::tree::Entry {
-                        mode: kind.into(),
-                        filename: k.as_slice().into(),
-                        oid,
-                    });
+                TreeBuilderEntry::Entry(entry) => {
+                    entries.push((k, entry));
                 }
             }
         }
 
-        entries.sort();
-        let tree = gix_object::Tree { entries };
-        let tree_oid = importer.put(&tree, node.base_oid)?;
+        entries.sort_by(|(a_name, _), (b_name, _)| a_name.cmp(b_name));
+
+        let tree = svn_tree::Node {
+            metadata: node.metadata,
+            entries,
+        };
+        let tree_oid = importer.put_blob(tree.serialize(), node.base_oid)?;
         cb(tree_oid, &tree, node.base_oid, importer)?;
         Ok(tree_oid)
     }
@@ -357,8 +339,8 @@ enum TreeBuilderRoot {
 }
 
 enum TreeBuilderEntry {
-    Loaded(TreeBuilderNode),
-    Stored(EntryKind, ObjectId),
+    SubTree(TreeBuilderNode),
+    Entry(svn_tree::NodeEntry),
 }
 
 struct TreeBuilderNode {

@@ -73,16 +73,6 @@ impl Importer {
         })
     }
 
-    pub(super) fn get<T: TryFrom<gix_object::Object, Error = gix_object::Object>>(
-        &self,
-        id: gix_hash::ObjectId,
-    ) -> Result<T, ConvertError> {
-        self.importer.get(id).map_err(|e| {
-            tracing::error!("failed to get object {id}: {e}");
-            ConvertError
-        })
-    }
-
     pub(super) fn get_blob(&self, id: gix_hash::ObjectId) -> Result<Vec<u8>, ConvertError> {
         self.importer.get_blob(id).map_err(|e| {
             tracing::error!("failed to get object {id}: {e}");

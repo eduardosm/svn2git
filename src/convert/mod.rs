@@ -1,11 +1,13 @@
 use crate::term_out::ProgressPrint;
 use crate::{FHashMap, git};
 
+mod bin_ser_de;
 mod git_wrap;
 mod meta;
 mod options;
 mod stage1;
 mod stage2;
+mod svn_tree;
 mod tree_builder;
 
 pub(crate) use options::{InitOptions, Options};
