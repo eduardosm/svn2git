@@ -295,13 +295,13 @@ impl TreeBuilder {
         ) -> Result<(), ConvertError>,
     ) -> Result<ObjectId, ConvertError> {
         match self.root {
-            TreeBuilderRoot::Loaded(ref node) => Self::build_node(node, importer, &mut cb),
+            TreeBuilderRoot::Loaded(node) => Self::build_node(node, importer, &mut cb),
             TreeBuilderRoot::Stored(tree_oid) => Ok(tree_oid),
         }
     }
 
     fn build_node(
-        node: &TreeBuilderNode,
+        node: TreeBuilderNode,
         importer: &mut git_wrap::Importer,
         cb: &mut impl FnMut(
             ObjectId,
@@ -323,9 +323,9 @@ impl TreeBuilder {
             oid: node.metadata,
         });
 
-        for (k, v) in node.entries.iter() {
-            match *v {
-                TreeBuilderEntry::Loaded(ref sub_node) => {
+        for (k, v) in node.entries {
+            match v {
+                TreeBuilderEntry::Loaded(sub_node) => {
                     let sub_tree_oid = Self::build_node(sub_node, importer, cb)?;
                     entries.push(gix_object::tree::Entry {
                         mode: EntryKind::Tree.into(),
