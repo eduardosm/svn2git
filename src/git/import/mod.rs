@@ -429,7 +429,7 @@ fn gather_objects(
     cb(ImportFinishProgress::Sort(seen_objects.len()));
 
     let mut seen_objects = seen_objects.iter().copied().collect::<Vec<_>>();
-    seen_objects.sort_by_key(|&oid| tmp_storage.get_offset(oid).unwrap());
+    seen_objects.sort_unstable_by_key(|&oid| tmp_storage.get_offset(oid).unwrap());
 
     Ok(seen_objects)
 }
@@ -547,7 +547,7 @@ fn write_pack_index(
     // V2 pack index format described in
     // https://git-scm.com/docs/pack-format#_version_2_pack_idx_files_support_packs_larger_than_4_gib_and
 
-    entries.sort_by_key(|entry| entry.oid);
+    entries.sort_unstable_by_key(|entry| entry.oid);
 
     let mut fan_out = [0u32; 256];
     for entry in entries.iter() {

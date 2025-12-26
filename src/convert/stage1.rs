@@ -981,7 +981,7 @@ impl Stage<'_> {
         if git_tree_entries.is_empty() {
             tree_map.insert(svn_tree_oid, None);
         } else {
-            git_tree_entries.sort();
+            git_tree_entries.sort_unstable();
             let git_tree_base = svn_tree_base.and_then(|base| tree_map[&base]);
             let git_tree = gix_object::Tree {
                 entries: git_tree_entries,

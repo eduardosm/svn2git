@@ -321,7 +321,7 @@ impl TreeBuilder {
             }
         }
 
-        entries.sort_by(|(a_name, _), (b_name, _)| a_name.cmp(b_name));
+        entries.sort_unstable_by(|(a_name, _), (b_name, _)| a_name.cmp(b_name));
 
         let tree = svn_tree::Node {
             metadata: node.metadata,
