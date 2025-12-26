@@ -164,7 +164,7 @@ impl ChangeSet {
                 })
                 .collect();
 
-            entries.sort();
+            entries.sort_unstable();
 
             importer
                 .put(gix_object::TreeRef { entries }, orig_tree_oid)
