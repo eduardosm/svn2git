@@ -239,6 +239,7 @@ fn main_inner() -> Result<(), RunError> {
         &options,
         &metadata_maker,
         &args.src,
+        args.remote_svn,
         &args.dest,
     );
 

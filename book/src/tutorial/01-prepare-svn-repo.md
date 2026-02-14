@@ -1,23 +1,24 @@
 # Prepare the Subversion Repository
 
-**svn2git** cannot convert a repository directly with an URL or a working copy.
-It needs a Subversion repository dump.
+**svn2git** needs a Subversion repository dump. It can read that dump in
+different ways:
 
-If you have access to the machine where the repository is hosted, you can use
-the `svnadmin dump` command to generate a dump. It is recommended to pass the
-`--deltas` option and compress the output, which will significantly reduce the
-size of the resulting file.
+* By reading the dump from a file, which can be optionally compressed.
+* By invoking `svnadmin dump` on a local mirror and consuming its output on the
+  fly.
+* By invoking `svnrdump dump` on a remote repository and consuming its output
+  on the fly.
 
-For example, you can use the following command to generate a deltified dump and
-compress it with XZ:
+The third method is the easiest one, since you just need to pass the repository
+URL to `svn2git` (with the `--remote-svn` option). However, it is not recommended
+for large repositories, since a network issue can interrupt the conversion,
+requiring to start the conversion from the beginning. Also, if you want to run
+multiple conversion attempts with different options, reading the remote repository
+every time can become a bottleneck. In those cases, it is better to create a
+local mirror.
 
-```sh
-svnadmin dump --deltas /path/to/repository | xz -z -c > my-svn-dump.xz
-```
-
-If you do not have access to the machine where the repository is hosted, you
-will need to create a mirror of the repository using the `svnsync` tool. This
-can be done for any repository you have read-only access.
+A mirror can be created with the `svnsync` tool for any repository to which you
+have at least read-only access.
 
 1. Choose a path where the mirror will be stored (we will use `/path/to/mirror`
    in this tutorial) and initialize an empty Subversion repository:
@@ -70,7 +71,11 @@ can be done for any repository you have read-only access.
    repository after the process has finished, you can run the above command
    again to get them into your mirror.
 
-Once mirroring has finished, you can generate a repository dump:
+Once mirroring is finished, you can pass `/path/to/mirror` to **svn2git**.
+
+Alternatively, you can generate a dump file with `svnadmin dump`. It is
+recommended to pass `--deltas` and compress the output, which can
+significantly reduce the resulting file size:
 
 ```sh
 svnadmin dump --deltas /path/to/mirror | xz -z -c > my-svn-dump.xz
