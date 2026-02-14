@@ -26,11 +26,12 @@ pub(super) fn run(
     progress_print: &ProgressPrint,
     options: &Options,
     src_path: &std::path::Path,
+    src_is_remote: bool,
     git_import: &mut git_wrap::Importer,
 ) -> Result<Output, ConvertError> {
     tracing::info!("Stage 1: import SVN repository");
 
-    let mut svn_dump_src = svn::source::DumpSource::open(src_path).map_err(|e| {
+    let mut svn_dump_src = svn::source::DumpSource::open(src_path, src_is_remote).map_err(|e| {
         tracing::error!("failed to open SVN dump source: {e}");
         ConvertError
     })?;
