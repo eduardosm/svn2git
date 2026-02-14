@@ -48,6 +48,7 @@ pub(crate) fn convert(
     options: &Options,
     makedata_meta: &dyn GitMetaMaker,
     src_path: &std::path::Path,
+    src_is_remote: bool,
     dst_path: &std::path::Path,
 ) -> Result<(), ConvertError> {
     progress_print.set_progress("initializing git import".into());
@@ -55,7 +56,13 @@ pub(crate) fn convert(
     let mut git_import = git_wrap::Importer::init(dst_path, options.git_obj_cache_size)?;
 
     let mut run_stages = || {
-        let stage1_out = stage1::run(progress_print, options, src_path, &mut git_import)?;
+        let stage1_out = stage1::run(
+            progress_print,
+            options,
+            src_path,
+            src_is_remote,
+            &mut git_import,
+        )?;
         stage2::run(
             progress_print,
             options,

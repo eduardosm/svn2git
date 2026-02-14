@@ -32,6 +32,11 @@ pub(crate) struct Cli {
     )]
     pub(crate) src: PathBuf,
     #[arg(
+        long = "remote-svn",
+        help = "Source Subversion repository is remote (use svnrdump)"
+    )]
+    pub(crate) remote_svn: bool,
+    #[arg(
         long = "dest",
         short = 'd',
         value_name = "PATH",
