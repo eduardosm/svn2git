@@ -59,6 +59,7 @@ conv-params: |
   rename-branches."trunk" = "master"
   rename-branches."branches/*" = "*"
 
+  head = "trunk"
 
   ignore-merges = [
     { path = "trunk", rev = 6 },

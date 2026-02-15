@@ -26,6 +26,7 @@ svn-revs:
 conv-params: |
   branches = ["trunk"]
   rename-branches."trunk" = "master"
+  head = "trunk"
   unbranched-name = "unbranched"
 
 logs: |

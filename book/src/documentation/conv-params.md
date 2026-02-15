@@ -88,7 +88,7 @@
   ]
   ```
 
-* `head` (default: `trunk`)
+* `head` (required)
 
   Specifies which branch will be used as Git HEAD. You have to specify the
   Subversion path of the branch (even if you renamed it with

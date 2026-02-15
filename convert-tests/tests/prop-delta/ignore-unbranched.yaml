@@ -68,6 +68,7 @@ svn-revs:
 
 conv-params: |
   branches = ["trunk"]
+  head = "trunk"
   unbranched-name = "unbranched"
 
 git-revs:

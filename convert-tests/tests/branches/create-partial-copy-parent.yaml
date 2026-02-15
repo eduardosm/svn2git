@@ -41,6 +41,8 @@ conv-params: |
   rename-branches."trunk" = "master"
   rename-branches."branches/*" = "*"
 
+  head = "trunk"
+
   partial-branches = [
     "branches/*",
   ]

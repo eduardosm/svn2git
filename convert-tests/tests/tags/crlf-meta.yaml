@@ -32,6 +32,8 @@ conv-params: |
   tags = ["tags/*"]
   rename-tags."tags/*" = "*"
 
+  head = "trunk"
+
 git-tags:
   - tag: t1
     rev: master~0

@@ -30,6 +30,7 @@ conv-params: |
   ]
   rename-branches."trunk" = "master"
   rename-branches."branches/*" = "*"
+  head = "trunk"
 
 logs: |
   D svn2git::convert::stage1: importing SVN revision 3

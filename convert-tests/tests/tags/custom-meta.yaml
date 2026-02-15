@@ -41,6 +41,8 @@ conv-params: |
   tags = ["tags/*"]
   rename-tags."tags/*" = "*"
 
+  head = "trunk"
+
   user-map-file = "user-map.txt"
   user-fallback-template = "{{ svn_author }} <unknown>"
   tag-msg-template = """

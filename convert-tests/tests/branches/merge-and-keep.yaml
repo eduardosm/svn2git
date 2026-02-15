@@ -69,6 +69,8 @@ conv-params: |
   rename-branches."trunk" = "master"
   rename-branches."branches/*" = "*"
 
+  head = "trunk"
+
   avoid-fully-reverted-merges = true
 
 logs: |

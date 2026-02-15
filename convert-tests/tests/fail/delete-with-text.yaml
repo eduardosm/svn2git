@@ -19,6 +19,7 @@ svn-revs:
 
 conv-params: |
   branches = ["trunk"]
+  head = "trunk"
 
 failed: true
 

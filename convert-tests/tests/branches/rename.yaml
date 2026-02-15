@@ -39,6 +39,8 @@ conv-params: |
   rename-branches."branches/*" = "b-*"
   rename-branches."branches/2" = "other-b2"
 
+  head = "trunk"
+
 logs: |
   D svn2git::convert::stage1: importing SVN revision 3
   D svn2git::convert::stage1: creating branch/tag "branches/1" from "trunk"

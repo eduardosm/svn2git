@@ -20,7 +20,6 @@ pub(crate) struct ConvParams {
     pub(crate) keep_deleted_tags: bool,
     #[serde(rename = "partial-tags", default)]
     pub(crate) partial_tags: Vec<String>,
-    #[serde(default = "default_head")]
     pub(crate) head: String,
     #[serde(rename = "unbranched-name")]
     pub(crate) unbranched_name: Option<String>,
@@ -61,8 +60,4 @@ fn false_() -> bool {
 #[inline(always)]
 fn true_() -> bool {
     true
-}
-
-fn default_head() -> String {
-    "trunk".into()
 }
