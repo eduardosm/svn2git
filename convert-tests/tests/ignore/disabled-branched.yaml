@@ -60,6 +60,7 @@ svn-revs:
 
 conv-params: |
   branches = ["trunk"]
+  head = "trunk"
   generate-gitignore = false
 
 git-revs:

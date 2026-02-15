@@ -59,6 +59,8 @@ conv-params: |
   rename-branches."trunk" = "master"
   rename-branches."branches/*" = "*"
 
+  head = "trunk"
+
 git-revs:
   - rev: master~2
     parents: []

@@ -59,6 +59,7 @@ conv-params: |
   ]
   rename-branches."trunk" = "master"
   rename-branches."branches/*" = "*"
+  head = "trunk"
 
 logs: |
   D svn2git::convert::stage2: emitting branch commits and tags for SVN revision 6

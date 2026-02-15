@@ -27,9 +27,12 @@ svn-revs:
 
 conv-params: |
   branches = ["trunk"]
+  head = "trunk"
   unbranched-name = "unbranched"
+
   user-map-file = "user-map.txt"
   user-fallback-template = "{{ svn_author }} <unknown>"
+
   commit-msg-template = """
   uuid: {{ svn_uuid }}
   author: {{ svn_author }}{% if mapped_author_name %}

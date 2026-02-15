@@ -30,6 +30,7 @@ svn-revs:
 conv-params: |
   branches = ["trunk"]
   tags = ["tags/*"]
+  head = "trunk"
 
 git-revs:
   - rev: trunk~1

@@ -40,6 +40,8 @@ conv-params: |
   rename-branches."trunk" = "master"
   rename-branches."branches/*" = "*"
 
+  head = "trunk"
+
   keep-deleted-branches = false
 
 logs: |
