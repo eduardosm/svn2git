@@ -2,7 +2,9 @@ svn-revs:
   - no: 2
   - no: 1
 
-conv-params: ""
+conv-params: |
+  branches = ["trunk"]
+  head = "trunk"
 
 failed: true
 

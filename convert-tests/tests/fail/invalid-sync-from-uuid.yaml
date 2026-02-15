@@ -3,7 +3,9 @@ svn-revs:
     props:
       svn:sync-from-uuid: This-is-not-a-UUID
 
-conv-params: ""
+conv-params: |
+  branches = ["trunk"]
+  head = "trunk"
 
 failed: true
 
