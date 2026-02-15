@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 
+use super::ConvertError;
 use crate::path_pattern::PathPattern;
 use crate::{FHashMap, FHashSet};
 
@@ -81,6 +82,28 @@ impl Options {
             delete_files: init.delete_files,
             git_obj_cache_size: init.git_obj_cache_size,
             git_repack: init.git_repack,
+        }
+    }
+
+    pub(crate) fn validate(&self) -> Result<(), ConvertError> {
+        if self.head_path.is_empty() {
+            if self.unbranched_name.is_none() {
+                tracing::error!("head path is empty, not unbranched branch name is not set");
+                Err(ConvertError)
+            } else {
+                Ok(())
+            }
+        } else {
+            match self.classify_dir(&self.head_path) {
+                DirClass::Branch(_, _, b"") => Ok(()),
+                _ => {
+                    tracing::error!(
+                        "head path \"{}\" is not a possible branch path",
+                        self.head_path.escape_ascii(),
+                    );
+                    Err(ConvertError)
+                }
+            }
         }
     }
 

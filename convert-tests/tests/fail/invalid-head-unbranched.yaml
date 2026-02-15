@@ -1,0 +1,36 @@
+svn-revs:
+  - props:
+      svn:log: init repository
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+      - path: trunk/x
+        kind: file
+        action: add
+        text: "x\n"
+      - path: branches
+        kind: dir
+        action: add
+      - path: branches/b1
+        kind: dir
+        action: add
+      - path: branches/b1/x
+        kind: file
+        action: add
+        text: "y\n"
+
+conv-params: |
+  branches = [
+    "trunk",
+    "branches/*",
+  ]
+  rename-branches."trunk" = "master"
+  rename-branches."branches/*" = "*"
+
+  head = ""
+
+failed: true
+
+logs: |
+  E svn2git::convert::options: head path is empty, not unbranched branch name is not set

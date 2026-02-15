@@ -234,6 +234,8 @@ fn main_inner() -> Result<(), RunError> {
         RunError::Generic
     })?;
 
+    options.validate().map_err(|_| RunError::Generic)?;
+
     let r = convert::convert(
         &progress_print,
         &options,

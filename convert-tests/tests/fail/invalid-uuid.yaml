@@ -2,7 +2,9 @@ svn-uuid: This-is-not-a-UUID
 
 svn-revs: []
 
-conv-params: ""
+conv-params: |
+  branches = ["trunk"]
+  head = "trunk"
 
 failed: true
 
