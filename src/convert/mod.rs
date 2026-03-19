@@ -73,7 +73,7 @@ pub(crate) fn convert(
 
     progress_print.set_progress("initializing git import".into());
 
-    let mut git_import = git_wrap::Importer::init(dst_path, options.git_obj_cache_size)?;
+    let mut git_import = git_wrap::Importer::init(dst_path, options.git_obj_cache_size, options)?;
 
     let mut run_stages = || {
         let stage1_out = stage1::run(
