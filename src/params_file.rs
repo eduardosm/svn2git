@@ -58,6 +58,8 @@ pub(crate) struct BranchRev {
 #[serde(deny_unknown_fields)]
 pub(crate) struct GitSvnParams {
     pub(crate) url: String,
+    #[serde(rename = "remote-name", default = "default_remote_name")]
+    pub(crate) remote_name: String,
 }
 
 #[inline(always)]
@@ -68,4 +70,9 @@ fn false_() -> bool {
 #[inline(always)]
 fn true_() -> bool {
     true
+}
+
+#[inline(always)]
+fn default_remote_name() -> String {
+    "origin".to_string()
 }
