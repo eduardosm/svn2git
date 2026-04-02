@@ -32,7 +32,7 @@ jobs:
   lint-aux:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install lint utilities
         run: sudo npm install -g markdownlint-cli@0.41.0 markdown-link-check@3.12.2
       - name: Install Rust
@@ -42,12 +42,12 @@ jobs:
   extract-changelog:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install Rust
         run: ./ci/install-rust.sh stable --profile minimal
       - run: ./ci/extract-changelog.sh
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: version-changelog
           path: version-changelog
@@ -56,7 +56,7 @@ jobs:
   rustfmt:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install Rust
         run: ./ci/install-rust.sh stable --profile minimal -c rustfmt
       - run: cargo fmt --all -- --check
@@ -64,7 +64,7 @@ jobs:
   clippy:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install Rust
         run: ./ci/install-rust.sh stable --profile minimal -c clippy
       - run: ./ci/clippy.sh
@@ -77,7 +77,7 @@ jobs:
           - rust-version: msrv
           - rust-version: stable
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install Rust
         run: ./ci/install-rust.sh "${{ matrix.rust-version }}" --profile minimal
       - run: ./ci/build-and-test.sh
@@ -85,12 +85,12 @@ jobs:
   package-crate:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install Rust
         run: ./ci/install-rust.sh stable --profile minimal
       - run: ./ci/package-crate.sh
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: packaged-crate
           path: output
@@ -101,7 +101,7 @@ jobs:
     env:
       DOCKER_IMAGE: quay.io/pypa/manylinux2014_x86_64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Pull Docker image ${{ env.DOCKER_IMAGE }}
         run: docker pull "$DOCKER_IMAGE"
       - name: Run Docker container
@@ -112,7 +112,7 @@ jobs:
             "$DOCKER_IMAGE" \
             bash ./ci/build-dist-linux.sh
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dist-linux
           path: |
@@ -125,7 +125,7 @@ jobs:
     env:
       DOCKER_IMAGE: debian:12-slim
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Pull Docker image ${{ env.DOCKER_IMAGE }}
         run: docker pull "$DOCKER_IMAGE"
       - name: Run Docker container
@@ -136,7 +136,7 @@ jobs:
             "$DOCKER_IMAGE" \
             bash ./ci/build-dist-windows.sh
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dist-windows
           path: |
@@ -147,7 +147,7 @@ jobs:
   build-dist-book:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install Rust
         run: ./ci/install-rust.sh stable --profile minimal
       - name: Install mdbook
@@ -155,7 +155,7 @@ jobs:
       - name: Build book
         run: ./ci/build-dist-book.sh
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dist-book
           path: book/svn2git-book.zip
