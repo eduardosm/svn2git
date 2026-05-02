@@ -157,8 +157,12 @@ impl Importer {
     ) -> Result<(), ImportError> {
         let tmp_storage = self.temp_storage.finish()?;
 
-        let seen_objects =
-            gather_objects(self.refs.values().copied(), &tmp_storage, &mut progress_cb)?;
+        let seen_objects = gather_objects(
+            self.refs.values().copied(),
+            &tmp_storage,
+            self.hash_kind,
+            &mut progress_cb,
+        )?;
 
         let mut packs_dir = self.path.clone();
         packs_dir.push("objects");
@@ -276,9 +280,10 @@ impl Importer {
                 "unexpected object kind for {cur_oid}",
             );
 
-            let cur_tree = gix_object::TreeRef::from_bytes(&raw_obj).unwrap_or_else(|_| {
-                panic!("failed to parse object {cur_oid}");
-            });
+            let cur_tree = gix_object::TreeRef::from_bytes(&raw_obj, self.hash_kind)
+                .unwrap_or_else(|_| {
+                    panic!("failed to parse object {cur_oid}");
+                });
 
             if let Some(entry) = cur_tree
                 .entries
@@ -357,6 +362,7 @@ fn init_repo(path: &std::path::Path) -> Result<(), ImportError> {
 fn gather_objects(
     initial_set: impl IntoIterator<Item = ObjectId>,
     tmp_storage: &temp_storage::TempStorage,
+    hash_kind: gix_hash::Kind,
     mut cb: impl FnMut(ImportFinishProgress),
 ) -> Result<Vec<ObjectId>, ImportError> {
     let mut seen_objects = FHashSet::default();
@@ -384,7 +390,7 @@ fn gather_objects(
     while let Some(obj_id) = obj_queue.pop_front() {
         let (obj_kind, raw_obj) = tmp_storage.get_raw(obj_id)?;
 
-        let obj = ObjectRef::from_bytes(obj_kind, &raw_obj).unwrap_or_else(|_| {
+        let obj = ObjectRef::from_bytes(&raw_obj, obj_kind, hash_kind).unwrap_or_else(|_| {
             panic!("failed to parse object {obj_id}");
         });
 
