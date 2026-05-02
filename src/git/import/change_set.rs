@@ -96,9 +96,10 @@ impl ChangeSet {
         };
 
         let mut entries = if let Some(ref raw_orig_tree) = raw_orig_tree {
-            let orig_tree = gix_object::TreeRef::from_bytes(raw_orig_tree).unwrap_or_else(|_| {
-                panic!("failed to parse object {}", orig_tree_oid.unwrap());
-            });
+            let orig_tree = gix_object::TreeRef::from_bytes(raw_orig_tree, importer.hash_kind)
+                .unwrap_or_else(|_| {
+                    panic!("failed to parse object {}", orig_tree_oid.unwrap());
+                });
 
             orig_tree
                 .entries
