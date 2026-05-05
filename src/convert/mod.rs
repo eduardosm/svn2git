@@ -29,6 +29,7 @@ pub(crate) trait GitMetaMaker {
     fn make_git_commit_meta(
         &self,
         svn_uuid: Option<&uuid::Uuid>,
+        svn_url: String,
         svn_rev_no: u32,
         svn_path: Option<&[u8]>,
         svn_rev_props: &FHashMap<Vec<u8>, Vec<u8>>,
@@ -37,6 +38,7 @@ pub(crate) trait GitMetaMaker {
     fn make_git_tag_meta(
         &self,
         svn_uuid: Option<&uuid::Uuid>,
+        svn_url: String,
         svn_rev_no: u32,
         svn_path: &[u8],
         svn_rev_props: &FHashMap<Vec<u8>, Vec<u8>>,
@@ -51,9 +53,27 @@ pub(crate) fn convert(
     src_is_remote: bool,
     dst_path: &std::path::Path,
 ) -> Result<(), ConvertError> {
+    let mut options_ok = true;
+
+    if options.git_svn.is_some() {
+        if options.generate_gitignore {
+            tracing::error!("git-svn mode does not support generating .gitignore");
+            options_ok = false;
+        }
+
+        if !options.delete_files.is_empty() {
+            tracing::error!("git-svn mode does not support deleting files");
+            options_ok = false;
+        }
+    }
+
+    if !options_ok {
+        return Err(ConvertError);
+    }
+
     progress_print.set_progress("initializing git import".into());
 
-    let mut git_import = git_wrap::Importer::init(dst_path, options.git_obj_cache_size)?;
+    let mut git_import = git_wrap::Importer::init(dst_path, options.git_obj_cache_size, options)?;
 
     let mut run_stages = || {
         let stage1_out = stage1::run(

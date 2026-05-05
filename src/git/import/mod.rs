@@ -5,6 +5,7 @@ use gix_hash::ObjectId;
 use gix_object::ObjectRef;
 use gix_object::tree::EntryKind;
 
+use crate::convert::Options;
 use crate::{FHashMap, FHashSet};
 
 mod change_set;
@@ -125,8 +126,12 @@ pub(crate) struct Importer {
 }
 
 impl Importer {
-    pub(crate) fn init(path: &std::path::Path, obj_cache_size: usize) -> Result<Self, ImportError> {
-        init_repo(path)?;
+    pub(crate) fn init(
+        path: &std::path::Path,
+        obj_cache_size: usize,
+        options: &Options,
+    ) -> Result<Self, ImportError> {
+        init_repo(path, options)?;
 
         let hash_kind = gix_hash::Kind::Sha1;
 
@@ -316,7 +321,7 @@ pub(crate) enum ImportFinishProgress {
     MakeIndex,
 }
 
-fn init_repo(path: &std::path::Path) -> Result<(), ImportError> {
+fn init_repo(path: &std::path::Path, options: &Options) -> Result<(), ImportError> {
     std::fs::create_dir(path).map_err(|e| ImportError::CreateDirError {
         path: path.to_path_buf(),
         error: e,
@@ -354,7 +359,20 @@ fn init_repo(path: &std::path::Path) -> Result<(), ImportError> {
 
     let config_path = path.join("config");
     let config = b"[core]\n\trepositoryformatversion = 0\n\tfilemode = true\n\tbare = true\n";
-    create_file(config_path, config)?;
+    std::fs::OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(&config_path)
+        .and_then(|mut file| {
+            file.write_all(config)?;
+            file.flush()?;
+            options.write_git_svn_config(&mut file)?;
+            Ok(())
+        })
+        .map_err(|e| ImportError::CreateFileError {
+            path: config_path,
+            error: e,
+        })?;
 
     Ok(())
 }

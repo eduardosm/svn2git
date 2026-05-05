@@ -1,10 +1,15 @@
 use std::borrow::Cow;
+use std::collections::HashMap;
+use std::fs::File;
+use std::io::{self, Write};
 
 use super::ConvertError;
+use crate::params_file::GitSvnParams;
 use crate::path_pattern::PathPattern;
 use crate::{FHashMap, FHashSet};
 
 pub(crate) struct InitOptions {
+    pub(crate) git_svn: Option<GitSvnParams>,
     pub(crate) keep_deleted_branches: bool,
     pub(crate) keep_deleted_tags: bool,
     pub(crate) head_path: Vec<u8>,
@@ -21,12 +26,13 @@ pub(crate) struct InitOptions {
 pub(crate) struct Options {
     root_dir_spec: ContainerDirSpecNode,
     pub(super) rename_branches: BranchRenamer,
+    pub(crate) git_svn: Option<GitSvnParams>,
     pub(super) keep_deleted_branches: bool,
     pub(super) partial_branches: PartialBranchSet,
     pub(super) rename_tags: BranchRenamer,
     pub(super) keep_deleted_tags: bool,
     pub(super) partial_tags: PartialBranchSet,
-    pub(super) head_path: Vec<u8>,
+    pub(crate) head_path: Vec<u8>,
     pub(super) unbranched_name: Option<String>,
     pub(super) enable_merges: bool,
     pub(super) merge_optional: PathPattern,
@@ -55,6 +61,7 @@ pub(super) enum DirClass<'a> {
     BranchParent,
 }
 
+#[derive(Debug)]
 pub(crate) struct BranchRenameAddError;
 
 pub(crate) struct PartialBranchAddError;
@@ -67,6 +74,7 @@ impl Options {
                 subdirs: FHashMap::default(),
             },
             rename_branches: BranchRenamer::new(),
+            git_svn: init.git_svn,
             keep_deleted_branches: init.keep_deleted_branches,
             partial_branches: PartialBranchSet::new(),
             rename_tags: BranchRenamer::new(),
@@ -260,6 +268,168 @@ impl Options {
             .or_default()
             .insert(path.to_vec());
     }
+
+    fn git_svn_mapping<'a>(&'a self, remote_name: &'a str) -> Vec<String> {
+        struct State<'o, 'r> {
+            options: &'o Options,
+            remote_name: &'o str,
+            result: &'r mut Vec<String>,
+            current: Vec<String>,
+        }
+        impl<'o, 'r> State<'o, 'r> {
+            fn new(
+                options: &'o Options,
+                remote_name: &'o str,
+                result: &'r mut Vec<String>,
+            ) -> Self {
+                Self {
+                    options,
+                    remote_name,
+                    result,
+                    current: Vec::new(),
+                }
+            }
+            fn fill(&mut self) {
+                self.traverse_container(&self.options.root_dir_spec, false);
+                for (from_bytes, to_bytes) in &self.options.rename_branches.exact {
+                    if let Ok(from) = String::from_utf8(from_bytes.clone()) {
+                        if let Ok(to) = String::from_utf8(to_bytes.clone()) {
+                            let remote = self.remote_name;
+                            self.result
+                                .push(format!("branches = {from}:refs/remotes/{remote}/{to}"));
+                        }
+                    }
+                }
+
+                for (from_bytes, to_bytes) in &self.options.rename_tags.exact {
+                    if let Ok(from) = String::from_utf8(from_bytes.clone()) {
+                        if let Ok(to) = String::from_utf8(to_bytes.clone()) {
+                            let remote = self.remote_name;
+                            self.result
+                                .push(format!("tags = {from}:refs/remotes/{remote}/tags/{to}"));
+                        }
+                    }
+                }
+            }
+            fn traverse_node_tags(&mut self, node: &DirSpecNode, is_tag: bool) {
+                match node {
+                    DirSpecNode::Branch(tag) => self.push(*tag, ""),
+                    DirSpecNode::Container(container) => self.traverse_container(container, is_tag),
+                }
+            }
+            fn traverse_container(&mut self, container: &ContainerDirSpecNode, mut is_tag: bool) {
+                if let Some(tag) = container.wildcard {
+                    self.push(tag, "/*");
+                    is_tag = tag;
+                }
+                for (name_bytes, subnode) in &container.subdirs {
+                    if let Ok(name) = String::from_utf8(name_bytes.clone()) {
+                        self.current.push(name);
+                        self.traverse_node_tags(subnode, is_tag);
+                        self.current.pop();
+                    }
+                }
+            }
+            fn push(&mut self, tag: bool, suffix: &str) {
+                let remote = self.remote_name;
+                let path = self.current.join("/");
+
+                let renamer = if tag {
+                    &self.options.rename_tags
+                } else {
+                    &self.options.rename_branches
+                };
+                let suffixed = format!("{path}{suffix}");
+                let mut git_name = suffixed.clone();
+
+                for (from_prefix, to_prefix) in &renamer.prefix {
+                    if suffixed.as_bytes().starts_with(from_prefix) {
+                        let mut result_bytes = to_prefix.clone();
+                        result_bytes.extend_from_slice(&suffixed.as_bytes()[from_prefix.len()..]);
+                        git_name = String::from_utf8(result_bytes).unwrap_or(path.clone());
+                        break;
+                    }
+                }
+
+                if let Some(to) = renamer.exact.get(path.as_bytes()) {
+                    git_name = String::from_utf8(to.clone()).unwrap_or(path.clone());
+                }
+
+                if tag {
+                    self.result.push(format!(
+                        "tags = {suffixed}:refs/remotes/{remote}/tags/{git_name}"
+                    ));
+                } else {
+                    self.result.push(format!(
+                        "branches = {suffixed}:refs/remotes/{remote}/{git_name}"
+                    ));
+                }
+            }
+        }
+
+        let mut result = Vec::new();
+        let mut state = State::new(self, remote_name, &mut result);
+        state.fill();
+
+        let mut mapping: HashMap<String, (String, bool)> = HashMap::new();
+
+        for line in result {
+            if let Some(rest) = line.strip_prefix("branches = ") {
+                let colon_pos = rest.find(':').unwrap();
+                let path = rest[..colon_pos].to_string();
+                let git_name = rest[colon_pos + 1..]
+                    .strip_prefix("refs/remotes/origin/")
+                    .unwrap_or(&rest[colon_pos + 1..])
+                    .to_string();
+                mapping.insert(path, (git_name, false));
+            } else if let Some(rest) = line.strip_prefix("tags = ") {
+                let colon_pos = rest.find(':').unwrap();
+                let path = rest[..colon_pos].to_string();
+                let git_name = rest[colon_pos + 1..]
+                    .strip_prefix("refs/remotes/origin/tags/")
+                    .unwrap_or(&rest[colon_pos + 1..])
+                    .to_string();
+                mapping.insert(path, (git_name, true));
+            }
+        }
+
+        let mut final_result: Vec<String> = mapping
+            .into_iter()
+            .map(|(path, (git_name, is_tag))| {
+                if is_tag {
+                    format!("tags = {path}:refs/remotes/origin/tags/{git_name}")
+                } else {
+                    format!("branches = {path}:refs/remotes/origin/{git_name}",)
+                }
+            })
+            .collect();
+
+        final_result.sort();
+        final_result
+    }
+
+    pub(crate) fn write_git_svn_config(&self, file: &mut File) -> io::Result<()> {
+        if let Some(svn_params) = &self.git_svn {
+            let mut fetch = Vec::new();
+            fetch.write_all(&self.head_path)?;
+            fetch.write_all(b":refs/remotes/")?;
+            fetch.write_all(svn_params.remote_name.as_bytes())?;
+            fetch.write_all(b"/")?;
+            fetch.write_all(&self.rename_branches.rename(&self.head_path))?;
+
+            file.write_all(b"[svn-remote \"svn\"]\n\turl = ")?;
+            file.write_all(svn_params.url.as_bytes())?;
+            file.write_all(b"\n\tfetch = ")?;
+            file.write_all(&fetch)?;
+            for rule in &self.git_svn_mapping(&svn_params.remote_name) {
+                if rule.as_bytes() != fetch {
+                    file.write_all(b"\n\t")?;
+                    file.write_all(rule.as_bytes())?;
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 pub(super) struct BranchRenamer {
@@ -364,6 +534,7 @@ mod tests {
 
     fn default_init() -> InitOptions {
         InitOptions {
+            git_svn: None,
             keep_deleted_branches: true,
             keep_deleted_tags: true,
             head_path: b"trunk".to_vec(),
@@ -456,5 +627,111 @@ mod tests {
         );
         assert_eq!(options.classify_dir(b"b/c/b"), DirClass::Unbranched);
         assert_eq!(options.classify_dir(b"c"), DirClass::Unbranched);
+    }
+
+    #[test]
+    fn test_branches_mapping_simple() {
+        // branches = a    :refs/remotes/origin/a
+        // branches = b/*  :refs/remotes/origin/b/*
+        // branches = b/a/*:refs/remotes/origin/b/a/*
+        // branches = b/b  :refs/remotes/origin/b/b
+        // branches = b/c/a:refs/remotes/origin/b/c/a
+        // tags = ta    :refs/remotes/origin/ta
+        // tags = tb/*  :refs/remotes/origin/tb/*
+        // tags = tb/a/*:refs/remotes/origin/tb/a/*
+        // tags = tb/b  :refs/remotes/origin/tb/b
+        // tags = tb/c/a:refs/remotes/origin/tb/c/a
+        let mut options = Options::new(default_init());
+        options.add_branch_dir(b"a", false).unwrap();
+        options.add_branch_dir(b"b/*", false).unwrap();
+        options.add_branch_dir(b"b/a/*", false).unwrap();
+        options.add_branch_dir(b"b/b", false).unwrap();
+        options.add_branch_dir(b"b/c/a", false).unwrap();
+        options.add_branch_dir(b"d-*", false).unwrap();
+
+        options.add_branch_dir(b"ta", true).unwrap();
+        options.add_branch_dir(b"tb/*", true).unwrap();
+        options.add_branch_dir(b"tb/a/*", true).unwrap();
+        options.add_branch_dir(b"tb/b", true).unwrap();
+        options.add_branch_dir(b"tb/c/a", true).unwrap();
+        options.add_branch_dir(b"td-*", true).unwrap();
+
+        assert_eq!(
+            options.git_svn_mapping("origin"),
+            &[
+                "branches = a:refs/remotes/origin/a",
+                "branches = b/*:refs/remotes/origin/b/*",
+                "branches = b/a/*:refs/remotes/origin/b/a/*",
+                "branches = b/b:refs/remotes/origin/b/b",
+                "branches = b/c/a:refs/remotes/origin/b/c/a",
+                "branches = d-*:refs/remotes/origin/d-*",
+                "tags = ta:refs/remotes/origin/tags/ta",
+                "tags = tb/*:refs/remotes/origin/tags/tb/*",
+                "tags = tb/a/*:refs/remotes/origin/tags/tb/a/*",
+                "tags = tb/b:refs/remotes/origin/tags/tb/b",
+                "tags = tb/c/a:refs/remotes/origin/tags/tb/c/a",
+                "tags = td-*:refs/remotes/origin/tags/td-*",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_branches_mapping_with_rename() {
+        // branches = a    :refs/remotes/origin/a
+        // branches = b/*  :refs/remotes/origin/b/*
+        // branches = b/a/*:refs/remotes/origin/b/a/*
+        // branches = b/b  :refs/remotes/origin/b/b
+        // branches = b/c/a:refs/remotes/origin/b/c/a
+        // tags = ta    :refs/remotes/origin/ta
+        // tags = tb/*  :refs/remotes/origin/tb/*
+        // tags = tb/a/*:refs/remotes/origin/tb/a/*
+        // tags = tb/b  :refs/remotes/origin/tb/b
+        // tags = tb/c/a:refs/remotes/origin/tb/c/a
+        let mut options = Options::new(default_init());
+        options.add_branch_dir(b"a", false).unwrap();
+        options.add_branch_dir(b"b/*", false).unwrap();
+        options.add_branch_dir(b"b/a/*", false).unwrap();
+        options.add_branch_dir(b"b/b", false).unwrap();
+        options.add_branch_dir(b"b/c/a", false).unwrap();
+        options.add_branch_dir(b"d-*", false).unwrap();
+
+        options.add_branch_dir(b"ta", true).unwrap();
+        options.add_branch_dir(b"tb/*", true).unwrap();
+        options.add_branch_dir(b"tb/a/*", true).unwrap();
+        options.add_branch_dir(b"tb/b", true).unwrap();
+        options.add_branch_dir(b"tb/c/a", true).unwrap();
+        options.add_branch_dir(b"td-*", true).unwrap();
+
+        options.add_branch_rename(b"exact", b"exact2").unwrap();
+        options.add_branch_rename(b"b/exact", b"exact3").unwrap();
+        options.add_branch_rename(b"b/a/*", b"exact/*").unwrap();
+        options.add_branch_rename(b"d-*", b"exact-*").unwrap();
+
+        options.add_tag_rename(b"texact", b"texact2").unwrap();
+        options.add_tag_rename(b"tb/exact", b"texact3").unwrap();
+        options.add_tag_rename(b"tb/a/*", b"texact/*").unwrap();
+        options.add_tag_rename(b"td-*", b"texact-*").unwrap();
+
+        assert_eq!(
+            options.git_svn_mapping("origin"),
+            &[
+                "branches = a:refs/remotes/origin/a",
+                "branches = b/*:refs/remotes/origin/b/*",
+                "branches = b/a/*:refs/remotes/origin/exact/*",
+                "branches = b/b:refs/remotes/origin/b/b",
+                "branches = b/c/a:refs/remotes/origin/b/c/a",
+                "branches = b/exact:refs/remotes/origin/exact3",
+                "branches = d-*:refs/remotes/origin/exact-*",
+                "branches = exact:refs/remotes/origin/exact2",
+                "tags = ta:refs/remotes/origin/tags/ta",
+                "tags = tb/*:refs/remotes/origin/tags/tb/*",
+                "tags = tb/a/*:refs/remotes/origin/tags/texact/*",
+                "tags = tb/b:refs/remotes/origin/tags/tb/b",
+                "tags = tb/c/a:refs/remotes/origin/tags/tb/c/a",
+                "tags = tb/exact:refs/remotes/origin/tags/texact3",
+                "tags = td-*:refs/remotes/origin/tags/texact-*",
+                "tags = texact:refs/remotes/origin/tags/texact2",
+            ]
+        );
     }
 }

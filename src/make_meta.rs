@@ -38,11 +38,19 @@ impl crate::convert::GitMetaMaker for GitMetadataMaker<'_> {
     fn make_git_commit_meta(
         &self,
         svn_uuid: Option<&uuid::Uuid>,
+        svn_url: String,
         svn_rev_no: u32,
         svn_path: Option<&[u8]>,
         svn_rev_props: &FHashMap<Vec<u8>, Vec<u8>>,
     ) -> Result<GitCommitMeta, String> {
-        let jinja_ctx = JinjaCtx::new(svn_uuid, svn_rev_no, svn_path, svn_rev_props, self.user_map);
+        let jinja_ctx = JinjaCtx::new(
+            svn_uuid,
+            svn_url,
+            svn_rev_no,
+            svn_path,
+            svn_rev_props,
+            self.user_map,
+        );
 
         let (author_name, author_email) = self.convert_author(
             &jinja_ctx,
@@ -82,12 +90,14 @@ impl crate::convert::GitMetaMaker for GitMetadataMaker<'_> {
     fn make_git_tag_meta(
         &self,
         svn_uuid: Option<&uuid::Uuid>,
+        svn_url: String,
         svn_rev_no: u32,
         svn_path: &[u8],
         svn_rev_props: &FHashMap<Vec<u8>, Vec<u8>>,
     ) -> Result<GitTagMeta, String> {
         let jinja_ctx = JinjaCtx::new(
             svn_uuid,
+            svn_url,
             svn_rev_no,
             Some(svn_path),
             svn_rev_props,
@@ -174,6 +184,7 @@ impl GitMetadataMaker<'_> {
 struct JinjaCtx {
     svn_uuid: String,
     svn_rev: u32,
+    svn_url: String,
     svn_author: String,
     svn_log: String,
     svn_path: String,
@@ -184,6 +195,7 @@ struct JinjaCtx {
 impl JinjaCtx {
     fn new(
         uuid: Option<&uuid::Uuid>,
+        url: String,
         rev_no: u32,
         branch_path: Option<&[u8]>,
         svn_rev_props: &FHashMap<Vec<u8>, Vec<u8>>,
@@ -204,6 +216,7 @@ impl JinjaCtx {
 
         Self {
             svn_uuid: uuid.map(ToString::to_string).unwrap_or_default(),
+            svn_url: url,
             svn_rev: rev_no,
             svn_log: String::from_utf8_lossy(svn_log.unwrap_or_default()).into_owned(),
             svn_author: String::from_utf8_lossy(svn_author.unwrap_or_default()).into_owned(),

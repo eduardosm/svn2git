@@ -95,6 +95,7 @@ fn main_inner() -> Result<(), RunError> {
             })?;
 
     let mut options = convert::Options::new(convert::InitOptions {
+        git_svn: params.git_svn,
         keep_deleted_branches: params.keep_deleted_branches,
         keep_deleted_tags: params.keep_deleted_tags,
         head_path: params.head.into(),
@@ -204,24 +205,42 @@ fn main_inner() -> Result<(), RunError> {
     let user_fallback_template = params.user_fallback_template.as_deref().unwrap_or(
         r#"{{ svn_author or "no-author" }} <{{ svn_author or "no-author" }}{% if svn_uuid %}@{{ svn_uuid }}{% endif %}>"#,
     );
-    let commit_msg_template = params
-        .commit_msg_template
-        .as_deref()
-        .unwrap_or(indoc::indoc! {r#"
+    let commit_msg_template = if options.git_svn.is_some() {
+        indoc::indoc! {r#"
+            {% if svn_log %}{{ svn_log }}
+
+            {% endif %}git-svn-id: {{ svn_url }}{{ svn_path }}@{{ svn_rev }} {{ svn_uuid }}
+        "#}
+    } else {
+        indoc::indoc! {r#"
             {% if svn_log %}{{ svn_log }}
 
             {% endif %}[[SVN revision: {{ svn_rev }}]]{% if svn_path %}
             [[SVN path: {{ svn_path }}]]{% endif %}
-        "#});
+        "#}
+    };
+    let tag_msg_template = if options.git_svn.is_some() {
+        indoc::indoc! {r#"
+            {% if svn_log %}{{ svn_log }}
+
+            {% endif %}git-svn-id: {{ svn_url }}{{ svn_path }}@{{ svn_rev }} {{ svn_uuid }}
+        "#}
+    } else {
+        indoc::indoc! {r#"
+            {% if svn_log %}{{ svn_log }}
+
+            {% endif %}[[SVN revision: {{ svn_rev }}]]
+            [[SVN path: {{ svn_path }}]]
+       "#}
+    };
+    let commit_msg_template = params
+        .commit_msg_template
+        .as_deref()
+        .unwrap_or(commit_msg_template);
     let tag_msg_template = params
         .tag_msg_template
         .as_deref()
-        .unwrap_or(indoc::indoc! {r#"
-           {% if svn_log %}{{ svn_log }}
-
-           {% endif %}[[SVN revision: {{ svn_rev }}]]
-           [[SVN path: {{ svn_path }}]]
-        "#});
+        .unwrap_or(tag_msg_template);
 
     let metadata_maker = make_meta::GitMetadataMaker::new(
         &user_map,
