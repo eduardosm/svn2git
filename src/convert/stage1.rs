@@ -578,14 +578,6 @@ impl Stage<'_> {
                         let new_executable = props_executable
                             .or(orig_entry.map(|(_, executable, _)| executable))
                             .unwrap_or(false);
-                        if let Some((orig_special, _, _)) = orig_entry {
-                            if orig_special.is_special() && !new_special {
-                                tracing::error!(
-                                    "removal of \"svn:special\" property is not supported"
-                                );
-                                return Err(ConvertError);
-                            }
-                        }
 
                         if let Some(node_text) = node_record.text.take() {
                             if node_text.is_delta {
@@ -708,7 +700,17 @@ impl Stage<'_> {
                                     return Err(ConvertError);
                                 }
                             } else if orig_special.is_special() && !new_special {
-                                unreachable!();
+                                let mut orig_data = self.git_import.get_blob(orig_oid)?;
+                                match orig_special {
+                                    svn_tree::FileSpecial::Link => {
+                                        orig_data.splice(0..0, b"link ".iter().copied());
+                                    }
+                                    svn_tree::FileSpecial::None => {
+                                        unreachable!();
+                                    }
+                                }
+                                let oid = self.git_import.put_blob(orig_data, None)?;
+                                (svn_tree::FileSpecial::None, oid)
                             } else {
                                 (orig_special, orig_oid)
                             };
