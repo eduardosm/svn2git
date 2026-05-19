@@ -28,10 +28,10 @@
   * A local Subversion repository (i.e., the directory that is managed with
     `svnadmin`). In this case, `svnadmin dump` will be executed automatically
     and its output is consumed on the fly.
-  * A URL to a remote repository, in which case the `--remove-svn` options has
+  * A URL to a remote repository, in which case the `--remote-svn` options has
     to be used.
 
-* `--remove-svn`
+* `--remote-svn`
 
   Source repository is a remote URL instead of a local repository. `svnrdump dump`
   will be executed automatically and its output is consumed on the fly.
