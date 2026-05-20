@@ -113,4 +113,4 @@ git-revs:
     tree:
       x:
         type: normal
-        data: link target4
+        data: "link target4"
