@@ -573,7 +573,7 @@ impl Stage<'_> {
                         }
 
                         let new_special = props_special
-                            .or_else(|| orig_entry.map(|(special, _, _)| special.is_special()))
+                            .or_else(|| orig_entry.map(|(special, _, _)| special.is_some()))
                             .unwrap_or(false);
                         let new_executable = props_executable
                             .or(orig_entry.map(|(_, executable, _)| executable))
@@ -583,8 +583,8 @@ impl Stage<'_> {
                             if node_text.is_delta {
                                 let source = if let Some((orig_special, _, orig_oid)) = orig_entry {
                                     let mut source = self.git_import.get_blob(orig_oid)?;
-                                    if orig_special == svn_tree::FileSpecial::Link {
-                                        source.splice(0..0, b"link ".iter().copied());
+                                    if let Some(orig_special) = orig_special {
+                                        self.encode_svn_special(&mut source, orig_special);
                                     }
                                     source
                                 } else {
@@ -612,19 +612,9 @@ impl Stage<'_> {
 
                                 let mut blob_data = result_data;
                                 let new_special = if new_special {
-                                    if blob_data.starts_with(b"link ") {
-                                        // strip the "link " prefix in symlinks
-                                        blob_data.splice(0..5, []);
-                                        svn_tree::FileSpecial::Link
-                                    } else {
-                                        tracing::error!(
-                                            "invalid symlink at \"{}\" in SVN dump",
-                                            node_path.escape_ascii(),
-                                        );
-                                        return Err(ConvertError);
-                                    }
+                                    Some(self.decode_svn_special(&mut blob_data, &node_path)?)
                                 } else {
-                                    svn_tree::FileSpecial::None
+                                    None
                                 };
 
                                 tree_builder.mod_inline(
@@ -636,34 +626,6 @@ impl Stage<'_> {
                                     self.git_import,
                                 )?;
                             } else {
-                                let new_special = if new_special {
-                                    // strip the "link " prefix in symlinks
-                                    if self.svn_dump_reader.remaining_text_len() < 5 {
-                                        tracing::error!(
-                                            "invalid symlink at \"{}\" in SVN dump",
-                                            node_path.escape_ascii(),
-                                        );
-                                        return Err(ConvertError);
-                                    }
-                                    let mut link_prefix = [0; 5];
-                                    self.svn_dump_reader.read_text(&mut link_prefix).map_err(
-                                        |e| {
-                                            tracing::error!("failed to read SVN node text: {e}");
-                                            ConvertError
-                                        },
-                                    )?;
-                                    if link_prefix != *b"link " {
-                                        tracing::error!(
-                                            "invalid symlink at \"{}\" in SVN dump",
-                                            node_path.escape_ascii(),
-                                        );
-                                        return Err(ConvertError);
-                                    }
-                                    svn_tree::FileSpecial::Link
-                                } else {
-                                    svn_tree::FileSpecial::None
-                                };
-
                                 let data_len =
                                     usize::try_from(self.svn_dump_reader.remaining_text_len())
                                         .unwrap();
@@ -675,6 +637,12 @@ impl Stage<'_> {
                                         ConvertError
                                     })?;
 
+                                let new_special = if new_special {
+                                    Some(self.decode_svn_special(&mut blob_data, &node_path)?)
+                                } else {
+                                    None
+                                };
+
                                 tree_builder.mod_inline(
                                     &node_path,
                                     new_special,
@@ -685,32 +653,17 @@ impl Stage<'_> {
                                 )?;
                             }
                         } else if let Some((orig_special, _, orig_oid)) = orig_entry {
-                            let (new_special, oid) = if !orig_special.is_special() && new_special {
+                            let (new_special, oid) = if orig_special.is_none() && new_special {
                                 let mut orig_data = self.git_import.get_blob(orig_oid)?;
-                                if orig_data.starts_with(b"link ") {
-                                    // strip the "link " prefix in symlinks
-                                    orig_data.splice(0..5, []);
-                                    let oid = self.git_import.put_blob(orig_data, None)?;
-                                    (svn_tree::FileSpecial::Link, oid)
-                                } else {
-                                    tracing::error!(
-                                        "invalid symlink at \"{}\" in SVN dump",
-                                        node_path.escape_ascii(),
-                                    );
-                                    return Err(ConvertError);
-                                }
-                            } else if orig_special.is_special() && !new_special {
-                                let mut orig_data = self.git_import.get_blob(orig_oid)?;
-                                match orig_special {
-                                    svn_tree::FileSpecial::Link => {
-                                        orig_data.splice(0..0, b"link ".iter().copied());
-                                    }
-                                    svn_tree::FileSpecial::None => {
-                                        unreachable!();
-                                    }
-                                }
+                                let new_special =
+                                    self.decode_svn_special(&mut orig_data, &node_path)?;
                                 let oid = self.git_import.put_blob(orig_data, None)?;
-                                (svn_tree::FileSpecial::None, oid)
+                                (Some(new_special), oid)
+                            } else if orig_special.is_some() && !new_special {
+                                let mut orig_data = self.git_import.get_blob(orig_oid)?;
+                                self.encode_svn_special(&mut orig_data, orig_special.unwrap());
+                                let oid = self.git_import.put_blob(orig_data, None)?;
+                                (None, oid)
                             } else {
                                 (orig_special, orig_oid)
                             };
@@ -896,6 +849,33 @@ impl Stage<'_> {
         Ok((svn_rev_props, next_record, node_ops, svn_tree_oid))
     }
 
+    fn decode_svn_special(
+        &self,
+        blob_data: &mut Vec<u8>,
+        node_path: &[u8],
+    ) -> Result<svn_tree::FileSpecial, ConvertError> {
+        if blob_data.starts_with(b"link ") {
+            // strip the "link " prefix in symlinks
+            blob_data.splice(0..5, []);
+            Ok(svn_tree::FileSpecial::Link)
+        } else {
+            tracing::error!(
+                "invalid \"svn:special\" file at \"{}\" in SVN dump",
+                node_path.escape_ascii(),
+            );
+            Err(ConvertError)
+        }
+    }
+
+    fn encode_svn_special(&self, blob_data: &mut Vec<u8>, special: svn_tree::FileSpecial) {
+        match special {
+            svn_tree::FileSpecial::Link => {
+                // re-insert the "link " prefix for symlinks
+                blob_data.splice(0..0, b"link ".iter().copied());
+            }
+        }
+    }
+
     fn svn_tree_to_git_tree(
         options: &Options,
         tree_map: &mut FHashMap<gix_hash::ObjectId, Option<gix_hash::ObjectId>>,
@@ -964,12 +944,15 @@ impl Stage<'_> {
                 } => match Self::file_special_handling(options, entry_name) {
                     SpecialHandling::None => {
                         git_tree_entries.push(gix_object::tree::Entry {
-                            mode: if special == svn_tree::FileSpecial::Link {
-                                EntryKind::Link.into()
-                            } else if executable {
-                                EntryKind::BlobExecutable.into()
-                            } else {
-                                EntryKind::Blob.into()
+                            mode: match special {
+                                None => {
+                                    if executable {
+                                        EntryKind::BlobExecutable.into()
+                                    } else {
+                                        EntryKind::Blob.into()
+                                    }
+                                }
+                                Some(svn_tree::FileSpecial::Link) => EntryKind::Link.into(),
                             },
                             filename: entry_name.clone().into(),
                             oid: entry_oid,
@@ -1308,13 +1291,17 @@ impl Stage<'_> {
                                     executable,
                                     oid,
                                 } => {
-                                    if special == svn_tree::FileSpecial::Link {
-                                        (EntryKind::Link, oid)
-                                    } else if executable {
-                                        (EntryKind::BlobExecutable, oid)
-                                    } else {
-                                        (EntryKind::Blob, oid)
-                                    }
+                                    let kind = match special {
+                                        None => {
+                                            if executable {
+                                                EntryKind::BlobExecutable
+                                            } else {
+                                                EntryKind::Blob
+                                            }
+                                        }
+                                        Some(svn_tree::FileSpecial::Link) => EntryKind::Link,
+                                    };
+                                    (kind, oid)
                                 }
                             };
                             change_set.change(&op.path, kind, blob);
