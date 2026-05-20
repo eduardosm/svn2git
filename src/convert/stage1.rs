@@ -859,11 +859,12 @@ impl Stage<'_> {
             blob_data.splice(0..5, []);
             Ok(svn_tree::FileSpecial::Link)
         } else {
-            tracing::error!(
-                "invalid \"svn:special\" file at \"{}\" in SVN dump",
+            // Unknown special types are treated as regular files, without any modification
+            tracing::warn!(
+                "unknown \"svn:special\" file kind at \"{}\" in SVN dump",
                 node_path.escape_ascii(),
             );
-            Err(ConvertError)
+            Ok(svn_tree::FileSpecial::Unknown)
         }
     }
 
@@ -872,6 +873,9 @@ impl Stage<'_> {
             svn_tree::FileSpecial::Link => {
                 // re-insert the "link " prefix for symlinks
                 blob_data.splice(0..0, b"link ".iter().copied());
+            }
+            svn_tree::FileSpecial::Unknown => {
+                // Unknown special types are treated as regular files, without any modification
             }
         }
     }
@@ -945,7 +949,7 @@ impl Stage<'_> {
                     SpecialHandling::None => {
                         git_tree_entries.push(gix_object::tree::Entry {
                             mode: match special {
-                                None => {
+                                None | Some(svn_tree::FileSpecial::Unknown) => {
                                     if executable {
                                         EntryKind::BlobExecutable.into()
                                     } else {
@@ -1292,7 +1296,7 @@ impl Stage<'_> {
                                     oid,
                                 } => {
                                     let kind = match special {
-                                        None => {
+                                        None | Some(svn_tree::FileSpecial::Unknown) => {
                                             if executable {
                                                 EntryKind::BlobExecutable
                                             } else {

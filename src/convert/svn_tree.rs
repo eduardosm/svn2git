@@ -19,6 +19,7 @@ pub(super) enum NodeEntry {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(super) enum FileSpecial {
+    Unknown,
     Link,
 }
 
@@ -107,7 +108,8 @@ impl NodeEntry {
                 out.push(1);
                 out.push(match special {
                     None => 0,
-                    Some(FileSpecial::Link) => 1,
+                    Some(FileSpecial::Unknown) => 1,
+                    Some(FileSpecial::Link) => 2,
                 });
                 out.push((*executable).into());
                 bin_ser_de::serialize_oid_into(oid, out);
@@ -125,7 +127,8 @@ impl NodeEntry {
             1 => {
                 let special = match bin_ser_de::deserialize_byte_from(src)? {
                     0 => None,
-                    1 => Some(FileSpecial::Link),
+                    1 => Some(FileSpecial::Unknown),
+                    2 => Some(FileSpecial::Link),
                     _ => return Err(DeserializeError),
                 };
                 let executable = bin_ser_de::deserialize_bool_from(src)?;
@@ -155,7 +158,8 @@ mod tests {
         let hash_kind = gix_hash::Kind::Sha1;
         let oid1 = gix_object::compute_hash(hash_kind, gix_object::Kind::Blob, b"obj 1").unwrap();
         let oid2 = gix_object::compute_hash(hash_kind, gix_object::Kind::Blob, b"obj 2").unwrap();
-        let oid3 = gix_object::compute_hash(hash_kind, gix_object::Kind::Tree, b"obj 3").unwrap();
+        let oid3 = gix_object::compute_hash(hash_kind, gix_object::Kind::Blob, b"obj 3").unwrap();
+        let oid4 = gix_object::compute_hash(hash_kind, gix_object::Kind::Blob, b"obj 4").unwrap();
         let tree = Node {
             metadata: oid1,
             entries: [
@@ -174,6 +178,14 @@ mod tests {
                         special: Some(FileSpecial::Link),
                         executable: false,
                         oid: oid3,
+                    },
+                ),
+                (
+                    b"unknown special".to_vec(),
+                    NodeEntry::File {
+                        special: Some(FileSpecial::Unknown),
+                        executable: false,
+                        oid: oid4,
                     },
                 ),
             ]

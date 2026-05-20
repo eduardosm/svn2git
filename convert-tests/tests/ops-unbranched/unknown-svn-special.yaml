@@ -1,0 +1,39 @@
+svn-revs:
+  - props:
+      svn:log: init
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+      - path: x
+        kind: file
+        action: add
+        props:
+          svn:special: "*"
+        text: "not a symlink"
+  - props:
+      svn:log: convert to symlink
+    nodes:
+      - path: x
+        kind: file
+        action: change
+        text: "link target"
+
+conv-params: |
+  head = ""
+  unbranched-name = "unbranched"
+
+logs: |
+  W svn2git::convert::stage1: unknown "svn:special" file kind at "x" in SVN dump
+
+git-revs:
+  - rev: unbranched~1
+    tree:
+      x:
+        type: normal
+        data: "not a symlink"
+  - rev: unbranched~0
+    tree:
+      x:
+        type: symlink
+        target: "target"
