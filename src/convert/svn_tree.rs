@@ -11,7 +11,7 @@ pub(super) struct Node {
 pub(super) enum NodeEntry {
     Dir(gix_hash::ObjectId),
     File {
-        special: FileSpecial,
+        special: Option<FileSpecial>,
         executable: bool,
         oid: gix_hash::ObjectId,
     },
@@ -19,7 +19,6 @@ pub(super) enum NodeEntry {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(super) enum FileSpecial {
-    None,
     Link,
 }
 
@@ -107,8 +106,8 @@ impl NodeEntry {
             } => {
                 out.push(1);
                 out.push(match special {
-                    FileSpecial::None => 0,
-                    FileSpecial::Link => 1,
+                    None => 0,
+                    Some(FileSpecial::Link) => 1,
                 });
                 out.push((*executable).into());
                 bin_ser_de::serialize_oid_into(oid, out);
@@ -125,8 +124,8 @@ impl NodeEntry {
             }
             1 => {
                 let special = match bin_ser_de::deserialize_byte_from(src)? {
-                    0 => FileSpecial::None,
-                    1 => FileSpecial::Link,
+                    0 => None,
+                    1 => Some(FileSpecial::Link),
                     _ => return Err(DeserializeError),
                 };
                 let executable = bin_ser_de::deserialize_bool_from(src)?;
@@ -147,13 +146,6 @@ impl NodeEntry {
     }
 }
 
-impl FileSpecial {
-    #[inline]
-    pub(super) fn is_special(&self) -> bool {
-        !matches!(self, FileSpecial::None)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::{FileSpecial, Node, NodeEntry};
@@ -171,7 +163,7 @@ mod tests {
                 (
                     b"file".to_vec(),
                     NodeEntry::File {
-                        special: FileSpecial::None,
+                        special: None,
                         executable: true,
                         oid: oid1,
                     },
@@ -179,7 +171,7 @@ mod tests {
                 (
                     b"symlink".to_vec(),
                     NodeEntry::File {
-                        special: FileSpecial::Link,
+                        special: Some(FileSpecial::Link),
                         executable: false,
                         oid: oid3,
                     },

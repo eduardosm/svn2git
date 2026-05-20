@@ -47,7 +47,7 @@ impl TreeBuilder {
     pub(super) fn mod_inline(
         &mut self,
         path: &[u8],
-        special: svn_tree::FileSpecial,
+        special: Option<svn_tree::FileSpecial>,
         executable: bool,
         blob: Vec<u8>,
         delta_base: Option<ObjectId>,
