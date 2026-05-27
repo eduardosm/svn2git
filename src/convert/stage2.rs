@@ -450,7 +450,9 @@ impl Stage<'_> {
         git_message.extend(b"git-svn-id: ");
         git_message.extend(self.options.git_svn_url.as_deref().unwrap().as_bytes());
         if !branch_path.is_empty() {
+            if !git_message.ends_with(b"/") {
             git_message.push(b'/');
+            }
             git_message.extend(branch_path);
         }
         git_message.push(b'@');
