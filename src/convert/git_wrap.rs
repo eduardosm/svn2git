@@ -1,6 +1,6 @@
 use super::ConvertError;
+use crate::convert::Options;
 use crate::git;
-
 pub(super) struct Importer {
     importer: git::Importer,
 }
@@ -9,8 +9,9 @@ impl Importer {
     pub(super) fn init(
         path: &std::path::Path,
         obj_cache_size: usize,
+        options: &Options,
     ) -> Result<Self, ConvertError> {
-        let importer = git::Importer::init(path, obj_cache_size).map_err(|e| {
+        let importer = git::Importer::init(path, obj_cache_size, options).map_err(|e| {
             tracing::error!("failed to initialize git import: {e}");
             ConvertError
         })?;

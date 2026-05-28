@@ -95,8 +95,7 @@ fn main_inner() -> Result<(), RunError> {
             })?;
 
     let mut options = convert::Options::new(convert::InitOptions {
-        git_svn_mode: params.git_svn_mode,
-        git_svn_url: params.git_svn_url,
+        git_svn: params.git_svn,
         keep_deleted_branches: params.keep_deleted_branches,
         keep_deleted_tags: params.keep_deleted_tags,
         head_path: params.head.into(),

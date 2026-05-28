@@ -279,6 +279,10 @@ impl Stage<'_> {
             .metadata_maker
             .make_git_commit_meta(
                 self.stage1_out.svn_uuid.as_ref(),
+                self.options
+                    .git_svn
+                    .as_ref()
+                    .map_or(String::new(), |p| p.url.clone()),
                 self.stage1_out.root_rev_data[root_commit].svn_rev,
                 None,
                 &self.stage1_out.root_rev_data[root_commit].svn_rev_props,
@@ -292,7 +296,7 @@ impl Stage<'_> {
         parents.extend(self.last_unbranched_commit);
 
         let mut git_message = gix_object::bstr::BString::from(git_commit_meta.message);
-        if self.options.git_svn_mode {
+        if self.options.git_svn.is_some() {
             self.add_git_svn_metadata(
                 &mut git_message,
                 b"",
@@ -381,6 +385,10 @@ impl Stage<'_> {
             .metadata_maker
             .make_git_commit_meta(
                 self.stage1_out.svn_uuid.as_ref(),
+                self.options
+                    .git_svn
+                    .as_ref()
+                    .map_or(String::new(), |p| p.url.clone()),
                 self.stage1_out.root_rev_data[root_commit].svn_rev,
                 Some(branch_path),
                 &self.stage1_out.root_rev_data[root_commit].svn_rev_props,
@@ -395,7 +403,7 @@ impl Stage<'_> {
         parents.extend(git_merges);
 
         let mut git_message = gix_object::bstr::BString::from(git_commit_meta.message);
-        if self.options.git_svn_mode {
+        if self.options.git_svn.is_some() {
             self.add_git_svn_metadata(
                 &mut git_message,
                 branch_path,
@@ -448,9 +456,11 @@ impl Stage<'_> {
             git_message.push(b'\n');
         }
         git_message.extend(b"git-svn-id: ");
-        git_message.extend(self.options.git_svn_url.as_deref().unwrap().as_bytes());
+        git_message.extend(self.options.git_svn.as_ref().unwrap().url.as_bytes());
         if !branch_path.is_empty() {
+            if !git_message.ends_with(b"/") {
             git_message.push(b'/');
+            }
             git_message.extend(branch_path);
         }
         git_message.push(b'@');
@@ -474,6 +484,10 @@ impl Stage<'_> {
             .metadata_maker
             .make_git_tag_meta(
                 self.stage1_out.svn_uuid.as_ref(),
+                self.options
+                    .git_svn
+                    .as_ref()
+                    .map_or(String::new(), |p| p.url.clone()),
                 self.stage1_out.root_rev_data[root_commit].svn_rev,
                 branch_path,
                 &self.stage1_out.root_rev_data[root_commit].svn_rev_props,
