@@ -46,6 +46,10 @@
   Path to a file in TOML format used to configure the conversion. See the
   [Conversion Parameters](./conv-params.md) section.
 
+* `--git-hash <KIND>` (default: `sha1`)
+
+  Hash type for the resulting Git repository. Valid values are `sha1` and `sha256`.
+
 * `--obj-cache-size <SIZE>` (default: `384`)
 
   Changes the size (in MiB) of the in-memory Git object cache. Do not use this

@@ -46,6 +46,7 @@ pub(crate) trait GitMetaMaker {
 pub(crate) fn convert(
     progress_print: &ProgressPrint,
     options: &Options,
+    git_hash_kind: gix_hash::Kind,
     makedata_meta: &dyn GitMetaMaker,
     src_path: &std::path::Path,
     src_is_remote: bool,
@@ -53,7 +54,8 @@ pub(crate) fn convert(
 ) -> Result<(), ConvertError> {
     progress_print.set_progress("initializing git import".into());
 
-    let mut git_import = git_wrap::Importer::init(dst_path, options.git_obj_cache_size)?;
+    let mut git_import =
+        git_wrap::Importer::init(dst_path, git_hash_kind, options.git_obj_cache_size)?;
 
     let mut run_stages = || {
         let stage1_out = stage1::run(

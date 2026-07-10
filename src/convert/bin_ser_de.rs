@@ -14,6 +14,10 @@ pub(super) fn serialize_oid_into(oid: &gix_hash::ObjectId, out: &mut Vec<u8>) {
             out.push(0);
             out.extend_from_slice(hash);
         }
+        gix_hash::ObjectId::Sha256(hash) => {
+            out.push(1);
+            out.extend_from_slice(hash);
+        }
         _ => unreachable!(), // non-exhaustive enum
     }
 }
@@ -69,6 +73,10 @@ pub(super) fn deserialize_oid_from(
         0 => {
             let hash = deserialize_byte_array_from(src)?;
             Ok(gix_hash::ObjectId::Sha1(hash))
+        }
+        1 => {
+            let hash = deserialize_byte_array_from(src)?;
+            Ok(gix_hash::ObjectId::Sha256(hash))
         }
         _ => Err(DeserializeError),
     }
