@@ -26,26 +26,26 @@ cyclic-poly-23 = "0.4.0"
 flate2 = "1.1.9"
 foldhash = "0.2.0"
 gix-actor = "0.41.1"
-gix-date = "0.15.4"
+gix-date = "0.15.5"
 gix-features = "0.48.1"
 gix-hash = { version = "0.25.1", features = ["sha1"] }
-gix-object = "0.61.0"
-gix-pack = "0.71.0"
+gix-object = "0.62.0"
+gix-pack = "0.72.0"
 indoc = "2.0.7"
-liblzma = { version = "0.4.6", features = ["static"] }
+liblzma = { version = "0.4.7", features = ["static"] }
 lru-mem = "0.3.0"
 lz4_flex = "0.13.1"
-minijinja = "2.20.0"
+minijinja = "2.21.0"
 serde = { version = "1.0.228", features = ["derive"] }
 smallvec = "1.15.2"
 toml = "1.1.2"
 tracing = "0.1.44"
 tracing-subscriber = "0.3.23"
-uuid = "1.23.3"
+uuid = "1.23.4"
 zstd = "0.13.3"
 
 [dependencies.regex-automata]
-version = "0.4.14"
+version = "0.4.15"
 default-features = false
 features = ["dfa", "hybrid", "meta", "nfa", "perf", "std", "syntax"]
 
@@ -55,9 +55,9 @@ default-features = false
 features = ["std"]
 
 [dev-dependencies]
-gix = "0.84.0"
+gix = "0.85.0"
 libtest-mimic = "0.8.2"
-rand = "0.10.1"
+rand = "0.10.2"
 serde_yaml = "0.9.34"
 
 [profile.dev]
