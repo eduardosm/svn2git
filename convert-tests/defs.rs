@@ -13,6 +13,8 @@ pub(crate) struct Test {
     pub(crate) svn_revs: Vec<SvnRev>,
     #[serde(rename = "conv-params")]
     pub(crate) conv_params: String,
+    #[serde(rename = "git-hash")]
+    pub(crate) git_hash: Option<String>,
     #[serde(rename = "user-map")]
     pub(crate) user_map: Option<String>,
     #[serde(rename = "git-repack", default = "false_")]

@@ -28,7 +28,7 @@ foldhash = "0.2.0"
 gix-actor = "0.41.1"
 gix-date = "0.15.5"
 gix-features = "0.48.1"
-gix-hash = { version = "0.25.1", features = ["sha1"] }
+gix-hash = { version = "0.25.1", features = ["sha1", "sha256"] }
 gix-object = "0.62.0"
 gix-pack = "0.72.0"
 indoc = "2.0.7"
@@ -55,7 +55,7 @@ default-features = false
 features = ["std"]
 
 [dev-dependencies]
-gix = "0.85.0"
+gix = { version = "0.85.0", features = ["sha1", "sha256"] }
 libtest-mimic = "0.8.2"
 rand = "0.10.2"
 serde_yaml = "0.9.34"

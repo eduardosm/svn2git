@@ -125,10 +125,12 @@ pub(crate) struct Importer {
 }
 
 impl Importer {
-    pub(crate) fn init(path: &std::path::Path, obj_cache_size: usize) -> Result<Self, ImportError> {
-        init_repo(path)?;
-
-        let hash_kind = gix_hash::Kind::Sha1;
+    pub(crate) fn init(
+        path: &std::path::Path,
+        hash_kind: gix_hash::Kind,
+        obj_cache_size: usize,
+    ) -> Result<Self, ImportError> {
+        init_repo(path, hash_kind)?;
 
         let temp_storage =
             temp_storage::TempStorage::create(&path.join("temp_storage"), obj_cache_size)?;
@@ -316,7 +318,7 @@ pub(crate) enum ImportFinishProgress {
     MakeIndex,
 }
 
-fn init_repo(path: &std::path::Path) -> Result<(), ImportError> {
+fn init_repo(path: &std::path::Path, hash_kind: gix_hash::Kind) -> Result<(), ImportError> {
     std::fs::create_dir(path).map_err(|e| ImportError::CreateDirError {
         path: path.to_path_buf(),
         error: e,
@@ -353,8 +355,26 @@ fn init_repo(path: &std::path::Path) -> Result<(), ImportError> {
     create_file(info_exclude_path, b"")?;
 
     let config_path = path.join("config");
-    let config = b"[core]\n\trepositoryformatversion = 0\n\tfilemode = true\n\tbare = true\n";
-    create_file(config_path, config)?;
+    let mut config = Vec::new();
+    config.extend(b"[core]\n");
+    match hash_kind {
+        gix_hash::Kind::Sha1 => {
+            config.extend(b"\trepositoryformatversion = 0\n");
+        }
+        gix_hash::Kind::Sha256 => {
+            config.extend(b"\trepositoryformatversion = 1\n");
+        }
+        _ => unreachable!(),
+    }
+    config.extend(b"\tfilemode = true\n\tbare = true\n");
+    match hash_kind {
+        gix_hash::Kind::Sha1 => {}
+        gix_hash::Kind::Sha256 => {
+            config.extend(b"[extensions]\n\tobjectformat = sha256\n");
+        }
+        _ => unreachable!(),
+    }
+    create_file(config_path, &config)?;
 
     Ok(())
 }

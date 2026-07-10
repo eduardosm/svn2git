@@ -51,6 +51,13 @@ pub(crate) struct Cli {
     )]
     pub(crate) conv_params: PathBuf,
     #[arg(
+        long = "git-hash",
+        value_name = "KIND",
+        help = "Git repository hash kind",
+        default_value = "sha1"
+    )]
+    pub(crate) git_hash: GitHash,
+    #[arg(
         long = "obj-cache-size",
         value_name = "SIZE",
         help = "size (in MiB) of in-memory git object cache",
@@ -88,4 +95,12 @@ impl LogLevel {
             Self::Trace => tracing::Level::TRACE,
         }
     }
+}
+
+#[derive(Copy, Clone, Debug, clap::ValueEnum)]
+pub(crate) enum GitHash {
+    #[value(name = "sha1")]
+    Sha1,
+    #[value(name = "sha256")]
+    Sha256,
 }

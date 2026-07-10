@@ -8,9 +8,10 @@ pub(super) struct Importer {
 impl Importer {
     pub(super) fn init(
         path: &std::path::Path,
+        hash_kind: gix_hash::Kind,
         obj_cache_size: usize,
     ) -> Result<Self, ConvertError> {
-        let importer = git::Importer::init(path, obj_cache_size).map_err(|e| {
+        let importer = git::Importer::init(path, hash_kind, obj_cache_size).map_err(|e| {
             tracing::error!("failed to initialize git import: {e}");
             ConvertError
         })?;

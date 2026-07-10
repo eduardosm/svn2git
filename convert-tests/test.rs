@@ -70,6 +70,7 @@ pub(crate) fn run_test(test_path: &Path) -> Result<(), String> {
     run_convert(
         svn2git_bin,
         &conv_params_path,
+        test_def.git_hash.as_deref(),
         &svn_dump_path,
         &git_repo_path,
         &conv_log_path,
@@ -328,6 +329,7 @@ fn end_svn_props(out: &mut Vec<u8>) {
 fn run_convert(
     conv_bin: &Path,
     conv_params_path: &Path,
+    git_hash: Option<&str>,
     svn_dump_path: &Path,
     git_repo_path: &Path,
     conv_log_path: &Path,
@@ -343,6 +345,8 @@ fn run_convert(
         .arg(git_repo_path)
         .arg("--conv-params")
         .arg(conv_params_path)
+        .args(git_hash.map(|_| "--git-hash"))
+        .args(git_hash)
         .arg("--log-file")
         .arg(conv_log_path)
         .args(git_repack.then_some("--git-repack"));

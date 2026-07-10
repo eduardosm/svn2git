@@ -5,6 +5,7 @@
     unreachable_pub,
     unused_qualifications
 )]
+#![allow(clippy::too_many_arguments)]
 #![forbid(unsafe_code)]
 
 use std::collections::BTreeSet;

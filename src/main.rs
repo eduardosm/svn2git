@@ -236,9 +236,15 @@ fn main_inner() -> Result<(), RunError> {
 
     options.validate().map_err(|_| RunError::Generic)?;
 
+    let git_hash_kind = match args.git_hash {
+        cli::GitHash::Sha1 => gix_hash::Kind::Sha1,
+        cli::GitHash::Sha256 => gix_hash::Kind::Sha256,
+    };
+
     let r = convert::convert(
         &progress_print,
         &options,
+        git_hash_kind,
         &metadata_maker,
         &args.src,
         args.remote_svn,
