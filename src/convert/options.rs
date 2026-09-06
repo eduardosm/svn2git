@@ -88,7 +88,7 @@ impl Options {
     pub(crate) fn validate(&self) -> Result<(), ConvertError> {
         if self.head_path.is_empty() {
             if self.unbranched_name.is_none() {
-                tracing::error!("head path is empty, not unbranched branch name is not set");
+                tracing::error!("head path is empty, unbranched branch name is not set");
                 Err(ConvertError)
             } else {
                 Ok(())
