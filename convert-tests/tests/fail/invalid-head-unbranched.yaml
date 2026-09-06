@@ -33,4 +33,4 @@ conv-params: |
 failed: true
 
 logs: |
-  E svn2git::convert::options: head path is empty, not unbranched branch name is not set
+  E svn2git::convert::options: head path is empty, unbranched branch name is not set
