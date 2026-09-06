@@ -451,7 +451,7 @@ impl Stage<'_> {
                     .into(),
                 tagger: git_tag_meta.tagger,
                 message: git_tag_meta.message.into(),
-                pgp_signature: None,
+                signature: None,
             },
             None,
         )?;

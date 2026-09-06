@@ -524,7 +524,8 @@ fn write_pack_data(
         let mut raw_header = Vec::new();
         header.write_to(decompressed_size, &mut raw_header).unwrap();
 
-        let mut compressor = gix_features::zlib::stream::deflate::Write::new(Vec::new());
+        let mut compressor =
+            gix_zlib::stream::deflate::Write::new(Vec::new(), gix_zlib::Compression::DEFAULT);
         compressor.write_all(&raw_obj).unwrap();
         compressor.flush().unwrap();
 
