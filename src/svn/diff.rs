@@ -13,6 +13,15 @@ pub(crate) enum ApplyError {
         view_offset: usize,
         view_len: usize,
     },
+    SourceCopyOutOfBounds {
+        source_view_len: usize,
+        copy_offset: usize,
+        copy_len: usize,
+    },
+    TargetCopyOutOfBounds {
+        target_len: usize,
+        copy_offset: usize,
+    },
     TruncatedInstrs,
     TruncatedNewData,
     NotEnoughNewData,
@@ -35,6 +44,21 @@ impl std::fmt::Display for ApplyError {
             } => write!(
                 f,
                 "source view with offset {view_offset} and length {view_len} out of bounds, source length is {source_len}",
+            ),
+            Self::SourceCopyOutOfBounds {
+                source_view_len,
+                copy_offset,
+                copy_len,
+            } => write!(
+                f,
+                "copy from source with offset {copy_offset} and length {copy_len} out of bounds, source view length is {source_view_len}",
+            ),
+            Self::TargetCopyOutOfBounds {
+                target_len,
+                copy_offset,
+            } => write!(
+                f,
+                "copy from target with offset {copy_offset} out of bounds, {target_len} byte(s) have been produced so far",
             ),
             Self::TruncatedInstrs => write!(f, "truncated instructions"),
             Self::TruncatedNewData => write!(f, "truncated new data"),
@@ -67,13 +91,16 @@ pub(crate) fn apply(
             usize::try_from(source_view_off).map_err(|_| ApplyError::OffsetTooLarge)?;
         let source_view_len =
             usize::try_from(source_view_len).map_err(|_| ApplyError::LenTooLarge)?;
-        let source_view = source
-            .get(source_view_off..(source_view_off + source_view_len))
-            .ok_or(ApplyError::SourceViewOutOfBounds {
+        let source_view_end = source_view_off
+            .checked_add(source_view_len)
+            .ok_or(ApplyError::LenTooLarge)?;
+        let source_view = source.get(source_view_off..source_view_end).ok_or(
+            ApplyError::SourceViewOutOfBounds {
                 source_len: source.len(),
                 view_offset: source_view_off,
                 view_len: source_view_len,
-            })?;
+            },
+        )?;
 
         let instrs_len = usize::try_from(instrs_len).map_err(|_| ApplyError::LenTooLarge)?;
         if rem_delta.len() < instrs_len {
@@ -97,6 +124,10 @@ pub(crate) fn apply(
             let (instr, copy_len) = read_instruction(&mut instrs)?;
             let copy_len = usize::try_from(copy_len).map_err(|_| ApplyError::LenTooLarge)?;
 
+            if copy_len > target_view_len - target_buf.len() {
+                return Err(ApplyError::MismatchedTargetLen);
+            }
+
             match instr {
                 0b00 => {
                     // copy from source view
@@ -104,13 +135,35 @@ pub(crate) fn apply(
                     let copy_offset =
                         usize::try_from(copy_offset).map_err(|_| ApplyError::OffsetTooLarge)?;
 
-                    target_buf.extend(&source_view[copy_offset..(copy_offset + copy_len)]);
+                    let copy_end = copy_offset
+                        .checked_add(copy_len)
+                        .ok_or(ApplyError::LenTooLarge)?;
+                    let copy_data = source_view.get(copy_offset..copy_end).ok_or(
+                        ApplyError::SourceCopyOutOfBounds {
+                            source_view_len: source_view.len(),
+                            copy_offset,
+                            copy_len,
+                        },
+                    )?;
+
+                    target_buf.extend(copy_data);
                 }
                 0b01 => {
                     // copy from target view
                     let copy_offset = read_var_len_int(&mut instrs)?;
                     let copy_offset =
-                        usize::try_from(copy_offset).map_err(|_| ApplyError::LenTooLarge)?;
+                        usize::try_from(copy_offset).map_err(|_| ApplyError::OffsetTooLarge)?;
+
+                    // The copied range is allowed to overlap the data being
+                    // produced, so each byte is read back as it is written.
+                    // Only the first read can be out of bounds: every later one
+                    // trails the write by a constant amount.
+                    if copy_len != 0 && copy_offset >= target_buf.len() {
+                        return Err(ApplyError::TargetCopyOutOfBounds {
+                            target_len: target_buf.len(),
+                            copy_offset,
+                        });
+                    }
 
                     for i in 0..copy_len {
                         target_buf.push(target_buf[copy_offset + i]);
@@ -177,7 +230,7 @@ fn read_instruction(src: &mut &[u8]) -> Result<(u8, u64), ApplyError> {
 
 #[cfg(test)]
 mod tests {
-    use super::apply;
+    use super::{ApplyError, apply};
 
     #[test]
     fn test_apply() {
@@ -202,5 +255,105 @@ mod tests {
         apply(delta, source, &mut target).unwrap();
 
         assert_eq!(target, expected_target);
+    }
+
+    #[test]
+    fn test_apply_source_copy_out_of_bounds() {
+        let delta = &[
+            b'S', b'V', b'N', 0,    // header
+            0x00, // source view offset 0
+            0x04, // source view length 4
+            0x04, // target view length 4
+            0x03, // instructions length 3
+            0x00, // new data length 0
+            0x04, 0x81, 0x48, // source, length 4, offset 200
+        ];
+
+        let mut target = Vec::new();
+        assert!(matches!(
+            apply(delta, b"aaaa", &mut target).unwrap_err(),
+            ApplyError::SourceCopyOutOfBounds { .. },
+        ));
+    }
+
+    #[test]
+    fn test_apply_target_copy_out_of_bounds() {
+        let delta = &[
+            b'S', b'V', b'N', 0,    // header
+            0x00, // source view offset 0
+            0x04, // source view length 4
+            0x04, // target view length 4
+            0x02, // instructions length 2
+            0x00, // new data length 0
+            0x44, 0x10, // target, length 4, offset 16
+        ];
+
+        let mut target = Vec::new();
+        assert!(matches!(
+            apply(delta, b"aaaa", &mut target).unwrap_err(),
+            ApplyError::TargetCopyOutOfBounds { .. },
+        ));
+    }
+
+    #[test]
+    fn test_apply_target_copy_from_unwritten_byte() {
+        // Copying from the target view may overlap the data being produced,
+        // but it cannot start at a byte that has not been produced yet.
+        let delta = &[
+            b'S', b'V', b'N', 0,    // header
+            0x00, // source view offset 0
+            0x04, // source view length 4
+            0x04, // target view length 4
+            0x04, // instructions length 4
+            0x00, // new data length 0
+            0x02, 0x00, // source, length 2, offset 0
+            0x42, 0x02, // target, length 2, offset 2
+        ];
+
+        let mut target = Vec::new();
+        assert!(matches!(
+            apply(delta, b"aaaa", &mut target).unwrap_err(),
+            ApplyError::TargetCopyOutOfBounds { .. },
+        ));
+    }
+
+    #[test]
+    fn test_apply_too_much_target_data() {
+        let delta = &[
+            b'S', b'V', b'N', 0,    // header
+            0x00, // source view offset 0
+            0x04, // source view length 4
+            0x02, // target view length 2
+            0x02, // instructions length 2
+            0x00, // new data length 0
+            0x04, 0x00, // source, length 4, offset 0
+        ];
+
+        let mut target = Vec::new();
+        assert!(matches!(
+            apply(delta, b"aaaa", &mut target).unwrap_err(),
+            ApplyError::MismatchedTargetLen,
+        ));
+    }
+
+    #[test]
+    fn test_apply_source_view_overflow() {
+        let delta = &[
+            b'S', b'V', b'N', 0, // header
+            // source view offset `u64::MAX`
+            0x81, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F, //
+            0x01, // source view length 1
+            0x01, // target view length 1
+            0x00, // instructions length 0
+            0x00, // new data length 0
+        ];
+
+        // `usize::try_from` fails on 32-bit targets, `checked_add` overflows
+        // on 64-bit ones.
+        let mut target = Vec::new();
+        assert!(matches!(
+            apply(delta, b"aaaa", &mut target).unwrap_err(),
+            ApplyError::OffsetTooLarge | ApplyError::LenTooLarge,
+        ));
     }
 }
