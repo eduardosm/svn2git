@@ -508,6 +508,43 @@ impl<'a> DumpReader<'a> {
         self.rem_text_len -= len_u64;
         Ok(())
     }
+
+    pub(crate) fn text_reader(&mut self) -> impl std::io::BufRead {
+        TextReader {
+            source: std::io::Read::take(&mut self.source, self.rem_text_len),
+            rem_len: &mut self.rem_text_len,
+        }
+    }
+}
+
+struct TextReader<'a> {
+    source: std::io::Take<&'a mut dyn std::io::BufRead>,
+    rem_len: &'a mut u64,
+}
+
+impl std::io::Read for TextReader<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let len = self.source.read(buf)?;
+        *self.rem_len -= len as u64;
+        Ok(len)
+    }
+
+    fn read_exact(&mut self, buf: &mut [u8]) -> std::io::Result<()> {
+        self.source.read_exact(buf)?;
+        *self.rem_len -= buf.len() as u64;
+        Ok(())
+    }
+}
+
+impl std::io::BufRead for TextReader<'_> {
+    fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+        self.source.fill_buf()
+    }
+
+    fn consume(&mut self, amount: usize) {
+        self.source.consume(amount);
+        *self.rem_len -= amount as u64;
+    }
 }
 
 type RecordHeader = FHashMap<Vec<u8>, Vec<u8>>;

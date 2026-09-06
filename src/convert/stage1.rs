@@ -591,24 +591,18 @@ impl Stage<'_> {
                                     Vec::new()
                                 };
 
-                                let delta_len =
-                                    usize::try_from(self.svn_dump_reader.remaining_text_len())
-                                        .unwrap();
-                                let mut delta = vec![0; delta_len];
-                                self.svn_dump_reader.read_text(&mut delta).map_err(|e| {
-                                    tracing::error!("failed to read SVN node text: {e}");
-                                    ConvertError
-                                })?;
+                                let mut delta = self.svn_dump_reader.text_reader();
 
                                 let mut result_data = Vec::new();
                                 if let Err(e) = svn::diff::apply(
-                                    delta.as_slice(),
-                                    source.as_slice(),
+                                    &mut delta,
+                                    &mut source.as_slice(),
                                     &mut result_data,
                                 ) {
                                     tracing::error!("failed to apply SVN delta: {e}");
                                     return Err(ConvertError);
                                 };
+                                drop(delta);
 
                                 let mut blob_data = result_data;
                                 let new_special = if new_special {
