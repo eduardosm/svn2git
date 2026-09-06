@@ -10,6 +10,7 @@
     clippy::enum_variant_names,
     clippy::type_complexity
 )]
+#![forbid(unsafe_code)]
 
 use std::process::ExitCode;
 
