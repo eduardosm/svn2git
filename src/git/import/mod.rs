@@ -9,7 +9,6 @@ use crate::{FHashMap, FHashSet};
 
 mod change_set;
 mod temp_storage;
-mod temp_storage_thread;
 
 pub(crate) use change_set::ChangeSet;
 
@@ -118,7 +117,7 @@ fn convert_hash_error(error: gix_hash::hasher::Error) -> ImportError {
 pub(crate) struct Importer {
     path: std::path::PathBuf,
     hash_kind: gix_hash::Kind,
-    temp_storage: temp_storage_thread::TempStorageThread,
+    temp_storage: temp_storage::TempStorage,
     empty_tree_oid: ObjectId,
     head_ref: String,
     refs: BTreeMap<String, ObjectId>,
@@ -134,7 +133,6 @@ impl Importer {
 
         let temp_storage =
             temp_storage::TempStorage::create(&path.join("temp_storage"), obj_cache_size)?;
-        let temp_storage = temp_storage_thread::TempStorageThread::new(temp_storage);
 
         let empty_tree_oid =
             Self::put_inner(gix_object::Tree::empty(), hash_kind, None, &temp_storage)?;
@@ -150,39 +148,49 @@ impl Importer {
     }
 
     pub(crate) fn abort(self) {
-        let _ = self.temp_storage.finish();
+        self.temp_storage.abort();
     }
 
     pub(crate) fn finish(
         self,
         mut progress_cb: impl FnMut(ImportFinishProgress),
     ) -> Result<(), ImportError> {
-        let tmp_storage = self.temp_storage.finish()?;
-
-        let seen_objects = gather_objects(
+        let seen_objects = match gather_objects(
             self.refs.values().copied(),
-            &tmp_storage,
+            &self.temp_storage,
             self.hash_kind,
             &mut progress_cb,
-        )?;
+        ) {
+            Ok(seen_objects) => seen_objects,
+            Err(e) => {
+                self.temp_storage.abort();
+                return Err(e);
+            }
+        };
 
         let mut packs_dir = self.path.clone();
         packs_dir.push("objects");
         packs_dir.push("pack");
 
-        let (pack_hash, pack_index_entires) = write_pack_data(
+        let (pack_hash, pack_index_entries) = match write_pack_data(
             &packs_dir,
             self.hash_kind,
             seen_objects.iter().copied(),
-            &tmp_storage,
+            &self.temp_storage,
             &mut progress_cb,
-        )?;
-
-        tmp_storage.remove()?;
+        ) {
+            Ok((pack_hash, pack_index_entries)) => (pack_hash, pack_index_entries),
+            Err(e) => {
+                self.temp_storage.abort();
+                return Err(e);
+            }
+        };
 
         progress_cb(ImportFinishProgress::MakeIndex);
 
-        write_pack_index(&packs_dir, pack_hash, pack_index_entires)?;
+        self.temp_storage.finish()?;
+
+        write_pack_index(&packs_dir, pack_hash, pack_index_entries)?;
 
         let head_path = self.path.join("HEAD");
         create_file_fmt(head_path, format_args!("ref: {}\n", self.head_ref))?;
@@ -215,7 +223,7 @@ impl Importer {
         object: impl gix_object::WriteTo,
         hash_kind: gix_hash::Kind,
         delta_base: Option<ObjectId>,
-        temp_storage: &temp_storage_thread::TempStorageThread,
+        temp_storage: &temp_storage::TempStorage,
     ) -> Result<ObjectId, ImportError> {
         let obj_kind = object.kind();
 
@@ -381,34 +389,52 @@ fn init_repo(path: &std::path::Path, hash_kind: gix_hash::Kind) -> Result<(), Im
 
 fn gather_objects(
     initial_set: impl IntoIterator<Item = ObjectId>,
-    tmp_storage: &temp_storage::TempStorage,
+    temp_storage: &temp_storage::TempStorage,
     hash_kind: gix_hash::Kind,
     mut cb: impl FnMut(ImportFinishProgress),
 ) -> Result<Vec<ObjectId>, ImportError> {
-    let mut seen_objects = FHashSet::default();
-    let mut obj_queue = VecDeque::new();
+    let total_num_objects = temp_storage.num_objects();
 
-    fn see(
-        obj_id: ObjectId,
-        seen_objects: &mut FHashSet<ObjectId>,
-        obj_queue: &mut VecDeque<ObjectId>,
-    ) {
-        if seen_objects.insert(obj_id) {
-            obj_queue.push_back(obj_id);
+    struct Gatherer {
+        seen_objects_set: FHashSet<ObjectId>,
+        seen_objects_vec: Vec<(usize, ObjectId)>,
+        obj_queue: VecDeque<ObjectId>,
+    }
+
+    let mut gatherer = Gatherer {
+        seen_objects_set: FHashSet::default(),
+        seen_objects_vec: Vec::new(),
+        obj_queue: VecDeque::new(),
+    };
+
+    impl Gatherer {
+        fn see(
+            &mut self,
+            obj_id: ObjectId,
+            enqueue: bool,
+            temp_storage: &temp_storage::TempStorage,
+        ) {
+            if self.seen_objects_set.insert(obj_id) {
+                self.seen_objects_vec
+                    .push((temp_storage.get_order(obj_id).unwrap(), obj_id));
+                if enqueue {
+                    self.obj_queue.push_back(obj_id);
+                }
+            }
         }
     }
 
     for init_oid in initial_set {
-        see(init_oid, &mut seen_objects, &mut obj_queue);
+        gatherer.see(init_oid, true, temp_storage);
     }
 
     cb(ImportFinishProgress::Gather(
-        seen_objects.len(),
-        tmp_storage.num_objects(),
+        gatherer.seen_objects_set.len(),
+        total_num_objects,
     ));
 
-    while let Some(obj_id) = obj_queue.pop_front() {
-        let (obj_kind, raw_obj) = tmp_storage.get_raw(obj_id)?;
+    while let Some(obj_id) = gatherer.obj_queue.pop_front() {
+        let (obj_kind, raw_obj) = temp_storage.get_raw(obj_id)?;
 
         let obj = ObjectRef::from_bytes(&raw_obj, obj_kind, hash_kind).unwrap_or_else(|_| {
             panic!("failed to parse object {obj_id}");
@@ -420,10 +446,10 @@ fn gather_objects(
                 for entry in tree.entries.iter() {
                     match entry.mode.kind() {
                         EntryKind::Tree => {
-                            see(entry.oid.to_owned(), &mut seen_objects, &mut obj_queue);
+                            gatherer.see(entry.oid.to_owned(), true, temp_storage);
                         }
                         EntryKind::Blob | EntryKind::BlobExecutable | EntryKind::Link => {
-                            seen_objects.insert(entry.oid.to_owned());
+                            gatherer.see(entry.oid.to_owned(), false, temp_storage);
                         }
                         EntryKind::Commit => {}
                     }
@@ -431,33 +457,34 @@ fn gather_objects(
             }
             ObjectRef::Blob(_) => unreachable!(), // blobs are never added to the queue
             ObjectRef::Commit(commit) => {
-                see(
-                    parse_hex_oid(commit.tree),
-                    &mut seen_objects,
-                    &mut obj_queue,
-                );
+                gatherer.see(parse_hex_oid(commit.tree), true, temp_storage);
 
                 for &parent in commit.parents.iter() {
-                    see(parse_hex_oid(parent), &mut seen_objects, &mut obj_queue);
+                    gatherer.see(parse_hex_oid(parent), true, temp_storage);
                 }
             }
             ObjectRef::Tag(tag) => {
-                see(parse_hex_oid(tag.target), &mut seen_objects, &mut obj_queue);
+                gatherer.see(parse_hex_oid(tag.target), true, temp_storage);
             }
         }
 
         cb(ImportFinishProgress::Gather(
-            seen_objects.len(),
-            tmp_storage.num_objects(),
+            gatherer.seen_objects_set.len(),
+            total_num_objects,
         ));
     }
 
-    cb(ImportFinishProgress::Sort(seen_objects.len()));
+    cb(ImportFinishProgress::Sort(gatherer.seen_objects_set.len()));
 
-    let mut seen_objects = seen_objects.iter().copied().collect::<Vec<_>>();
-    seen_objects.sort_unstable_by_key(|&oid| tmp_storage.get_offset(oid).unwrap());
+    gatherer
+        .seen_objects_vec
+        .sort_unstable_by_key(|&(order, _)| order);
 
-    Ok(seen_objects)
+    Ok(gatherer
+        .seen_objects_vec
+        .iter()
+        .map(|&(_, oid)| oid)
+        .collect())
 }
 
 struct PackIndexEntry {
@@ -470,7 +497,7 @@ fn write_pack_data(
     packs_dir: &std::path::Path,
     hash_kind: gix_hash::Kind,
     seen_objects: impl ExactSizeIterator<Item = ObjectId>,
-    tmp_storage: &temp_storage::TempStorage,
+    temp_storage: &temp_storage::TempStorage,
     mut cb: impl FnMut(ImportFinishProgress),
 ) -> Result<(ObjectId, Vec<PackIndexEntry>), ImportError> {
     let pack_data_version = gix_pack::data::Version::V2;
@@ -502,7 +529,7 @@ fn write_pack_data(
     for (i, oid) in seen_objects.enumerate() {
         let entry_offset = pack_data_offset;
 
-        let (obj_kind, delta_base_oid, mut raw_obj) = tmp_storage.get_raw_maybe_delta(oid)?;
+        let (obj_kind, delta_base_oid, mut raw_obj) = temp_storage.get_raw_maybe_delta(oid)?;
         let header;
         if let Some(base_offset) = delta_base_oid.and_then(|base_oid| offset_map.get(&base_oid)) {
             header = gix_pack::data::entry::Header::OfsDelta {
@@ -510,7 +537,7 @@ fn write_pack_data(
             };
         } else {
             if delta_base_oid.is_some() {
-                (_, raw_obj) = tmp_storage.get_raw(oid)?;
+                (_, raw_obj) = temp_storage.get_raw(oid)?;
             }
             header = match obj_kind {
                 gix_object::Kind::Tree => gix_pack::data::entry::Header::Tree,
