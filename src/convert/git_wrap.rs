@@ -9,12 +9,14 @@ impl Importer {
     pub(super) fn init(
         path: &std::path::Path,
         hash_kind: gix_hash::Kind,
+        large_obj_threshold: usize,
         obj_cache_size: usize,
     ) -> Result<Self, ConvertError> {
-        let importer = git::Importer::init(path, hash_kind, obj_cache_size).map_err(|e| {
-            tracing::error!("failed to initialize git import: {e}");
-            ConvertError
-        })?;
+        let importer = git::Importer::init(path, hash_kind, large_obj_threshold, obj_cache_size)
+            .map_err(|e| {
+                tracing::error!("failed to initialize git import: {e}");
+                ConvertError
+            })?;
         Ok(Self { importer })
     }
 
@@ -53,6 +55,14 @@ impl Importer {
         })
     }
 
+    pub(super) fn put_blob_stream(
+        &self,
+        delta_base: Option<gix_hash::ObjectId>,
+    ) -> ObjectWriter<'_> {
+        let obj_writer = self.importer.put_blob_stream(delta_base);
+        ObjectWriter { writer: obj_writer }
+    }
+
     pub(crate) fn put_blob(
         &mut self,
         data: Vec<u8>,
@@ -72,6 +82,19 @@ impl Importer {
             tracing::error!("failed to get object {id}: {e}");
             ConvertError
         })
+    }
+
+    pub(super) fn get_blob_stream(
+        &self,
+        id: gix_hash::ObjectId,
+    ) -> Result<ObjectReader, ConvertError> {
+        self.importer
+            .get_blob_stream(id)
+            .map(|reader| ObjectReader { reader })
+            .map_err(|e| {
+                tracing::error!("failed to get object {id}: {e}");
+                ConvertError
+            })
     }
 
     pub(super) fn get_blob(&self, id: gix_hash::ObjectId) -> Result<Vec<u8>, ConvertError> {
@@ -101,5 +124,42 @@ impl Importer {
 
     pub(super) fn set_ref(&mut self, ref_name: &str, commit_oid: gix_hash::ObjectId) {
         self.importer.set_ref(ref_name, commit_oid);
+    }
+}
+
+pub(super) struct ObjectWriter<'a> {
+    writer: git::ObjectWriter<'a>,
+}
+
+impl ObjectWriter<'_> {
+    pub(super) fn finish(self) -> Result<gix_hash::ObjectId, ConvertError> {
+        self.writer.finish().map_err(|e| {
+            tracing::error!("failed to put object: {e}");
+            ConvertError
+        })
+    }
+}
+
+impl std::io::Write for ObjectWriter<'_> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.writer.write(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.writer.flush()
+    }
+}
+
+pub(super) struct ObjectReader {
+    reader: git::ObjectReader,
+}
+
+impl std::io::Read for ObjectReader {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.reader.read(buf)
+    }
+
+    fn read_to_end(&mut self, buf: &mut Vec<u8>) -> std::io::Result<usize> {
+        self.reader.read_to_end(buf)
     }
 }

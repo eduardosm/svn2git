@@ -14,6 +14,7 @@ pub(crate) struct InitOptions {
     pub(crate) avoid_fully_reverted_merges: bool,
     pub(crate) generate_gitignore: bool,
     pub(crate) delete_files: PathPattern,
+    pub(crate) large_git_obj_threshold: usize,
     pub(crate) git_obj_cache_size: usize,
     pub(crate) git_repack: bool,
 }
@@ -34,6 +35,7 @@ pub(crate) struct Options {
     pub(super) ignore_merges_at: FHashMap<u32, FHashSet<Vec<u8>>>,
     pub(super) generate_gitignore: bool,
     pub(super) delete_files: PathPattern,
+    pub(super) large_git_obj_threshold: usize,
     pub(super) git_obj_cache_size: usize,
     pub(super) git_repack: bool,
 }
@@ -80,6 +82,7 @@ impl Options {
             ignore_merges_at: FHashMap::default(),
             generate_gitignore: init.generate_gitignore,
             delete_files: init.delete_files,
+            large_git_obj_threshold: init.large_git_obj_threshold,
             git_obj_cache_size: init.git_obj_cache_size,
             git_repack: init.git_repack,
         }
@@ -373,6 +376,7 @@ mod tests {
             avoid_fully_reverted_merges: false,
             generate_gitignore: false,
             delete_files: PathPattern::default(),
+            large_git_obj_threshold: 250_000_000,
             git_obj_cache_size: 250_000_000,
             git_repack: false,
         }

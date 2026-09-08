@@ -34,6 +34,10 @@ pub(crate) enum ImportError {
         path: std::path::PathBuf,
         error: std::io::Error,
     },
+    RemoveDirError {
+        path: std::path::PathBuf,
+        error: std::io::Error,
+    },
     CreateDirError {
         path: std::path::PathBuf,
         error: std::io::Error,
@@ -41,6 +45,9 @@ pub(crate) enum ImportError {
     RenameError {
         source_path: std::path::PathBuf,
         dest_path: std::path::PathBuf,
+        error: std::io::Error,
+    },
+    OtherIoError {
         error: std::io::Error,
     },
     Sha1Collision {
@@ -83,6 +90,12 @@ impl std::fmt::Display for ImportError {
             } => {
                 write!(f, "failed to remove file {path:?}: {error}")
             }
+            Self::RemoveDirError {
+                ref path,
+                ref error,
+            } => {
+                write!(f, "failed to remove directory {path:?}: {error}")
+            }
             Self::CreateDirError {
                 ref path,
                 ref error,
@@ -98,6 +111,9 @@ impl std::fmt::Display for ImportError {
                     f,
                     "failed to rename {source_path:?} to {dest_path:?}: {error}"
                 )
+            }
+            Self::OtherIoError { ref error } => {
+                write!(f, "{error}")
             }
             Self::Sha1Collision { hash } => {
                 write!(f, "SHA-1 collision attack with hash {hash}")
@@ -127,15 +143,19 @@ impl Importer {
     pub(crate) fn init(
         path: &std::path::Path,
         hash_kind: gix_hash::Kind,
+        large_obj_threshold: usize,
         obj_cache_size: usize,
     ) -> Result<Self, ImportError> {
         init_repo(path, hash_kind)?;
 
-        let temp_storage =
-            temp_storage::TempStorage::create(&path.join("temp_storage"), obj_cache_size)?;
+        let temp_storage = temp_storage::TempStorage::create(
+            &path.join("temp_storage"),
+            hash_kind,
+            large_obj_threshold,
+            obj_cache_size,
+        )?;
 
-        let empty_tree_oid =
-            Self::put_inner(gix_object::Tree::empty(), hash_kind, None, &temp_storage)?;
+        let empty_tree_oid = Self::put_inner(gix_object::Tree::empty(), None, &temp_storage)?;
 
         Ok(Self {
             path: path.to_path_buf(),
@@ -212,30 +232,34 @@ impl Importer {
     }
 
     pub(crate) fn put(
-        &mut self,
+        &self,
         object: impl gix_object::WriteTo,
         delta_base: Option<ObjectId>,
     ) -> Result<ObjectId, ImportError> {
-        Self::put_inner(object, self.hash_kind, delta_base, &self.temp_storage)
+        Self::put_inner(object, delta_base, &self.temp_storage)
     }
 
     fn put_inner(
         object: impl gix_object::WriteTo,
-        hash_kind: gix_hash::Kind,
         delta_base: Option<ObjectId>,
         temp_storage: &temp_storage::TempStorage,
     ) -> Result<ObjectId, ImportError> {
         let obj_kind = object.kind();
 
-        let mut raw_obj = Vec::new();
-        gix_object::WriteTo::write_to(&object, &mut raw_obj).unwrap();
+        let mut obj_writer = temp_storage.insert_raw_stream(obj_kind, delta_base);
+        gix_object::WriteTo::write_to(&object, &mut obj_writer)
+            .map_err(|e| ImportError::OtherIoError { error: e })?;
 
-        let obj_id =
-            gix_object::compute_hash(hash_kind, obj_kind, &raw_obj).map_err(convert_hash_error)?;
-
-        temp_storage.insert_raw(obj_id, obj_kind, raw_obj, delta_base)?;
+        let obj_id = obj_writer.finish()?;
 
         Ok(obj_id)
+    }
+
+    pub(crate) fn put_blob_stream(&self, delta_base: Option<ObjectId>) -> ObjectWriter<'_> {
+        let obj_writer = self
+            .temp_storage
+            .insert_raw_stream(gix_object::Kind::Blob, delta_base);
+        ObjectWriter { writer: obj_writer }
     }
 
     pub(crate) fn put_blob(
@@ -243,16 +267,22 @@ impl Importer {
         data: Vec<u8>,
         delta_base: Option<ObjectId>,
     ) -> Result<ObjectId, ImportError> {
-        let obj_id = gix_object::compute_hash(self.hash_kind, gix_object::Kind::Blob, &data)
-            .map_err(convert_hash_error)?;
-
         self.temp_storage
-            .insert_raw(obj_id, gix_object::Kind::Blob, data, delta_base)?;
-        Ok(obj_id)
+            .insert_raw(gix_object::Kind::Blob, data, delta_base)
     }
 
     pub(crate) fn get_raw(&self, id: ObjectId) -> Result<(gix_object::Kind, Vec<u8>), ImportError> {
         self.temp_storage.get_raw(id)
+    }
+
+    pub(crate) fn get_blob_stream(&self, id: ObjectId) -> Result<ObjectReader, ImportError> {
+        let (obj_kind, _, reader) = self.temp_storage.get_raw_stream(id)?;
+        assert_eq!(
+            obj_kind,
+            gix_object::Kind::Blob,
+            "unexpected object kind for {id}",
+        );
+        Ok(ObjectReader { reader })
     }
 
     pub(crate) fn get_blob(&self, id: ObjectId) -> Result<Vec<u8>, ImportError> {
@@ -260,7 +290,7 @@ impl Importer {
         assert_eq!(
             obj_kind,
             gix_object::Kind::Blob,
-            "unexpected object kind for {id}"
+            "unexpected object kind for {id}",
         );
 
         Ok(raw_obj)
@@ -316,6 +346,40 @@ impl Importer {
 
     pub(crate) fn set_ref(&mut self, ref_name: &str, commit_oid: ObjectId) {
         self.refs.insert(ref_name.into(), commit_oid);
+    }
+}
+
+pub(crate) struct ObjectWriter<'a> {
+    writer: temp_storage::TempStorageWriter<'a>,
+}
+
+impl ObjectWriter<'_> {
+    pub(crate) fn finish(self) -> Result<ObjectId, ImportError> {
+        self.writer.finish()
+    }
+}
+
+impl std::io::Write for ObjectWriter<'_> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.writer.write(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.writer.flush()
+    }
+}
+
+pub(crate) struct ObjectReader {
+    reader: temp_storage::TempStorageReader,
+}
+
+impl std::io::Read for ObjectReader {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.reader.read(buf)
+    }
+
+    fn read_to_end(&mut self, buf: &mut Vec<u8>) -> std::io::Result<usize> {
+        self.reader.read_to_end(buf)
     }
 }
 
@@ -529,7 +593,8 @@ fn write_pack_data(
     for (i, oid) in seen_objects.enumerate() {
         let entry_offset = pack_data_offset;
 
-        let (obj_kind, delta_base_oid, mut raw_obj) = temp_storage.get_raw_maybe_delta(oid)?;
+        let (obj_kind, mut obj_md_size, delta_base_oid, mut raw_stream) =
+            temp_storage.get_raw_stream_maybe_delta(oid)?;
         let header;
         if let Some(base_offset) = delta_base_oid.and_then(|base_oid| offset_map.get(&base_oid)) {
             header = gix_pack::data::entry::Header::OfsDelta {
@@ -537,7 +602,7 @@ fn write_pack_data(
             };
         } else {
             if delta_base_oid.is_some() {
-                (_, raw_obj) = temp_storage.get_raw(oid)?;
+                (_, obj_md_size, raw_stream) = temp_storage.get_raw_stream(oid)?;
             }
             header = match obj_kind {
                 gix_object::Kind::Tree => gix_pack::data::entry::Header::Tree,
@@ -547,26 +612,31 @@ fn write_pack_data(
             };
         }
 
-        let decompressed_size = u64::try_from(raw_obj.len()).unwrap();
-        let mut raw_header = Vec::new();
-        header.write_to(decompressed_size, &mut raw_header).unwrap();
+        let mut crc32_stream = Crc32Stream::new(&mut pack_data_file);
 
-        let mut compressor =
-            gix_zlib::stream::deflate::Write::new(Vec::new(), gix_zlib::Compression::DEFAULT);
-        compressor.write_all(&raw_obj).unwrap();
-        compressor.flush().unwrap();
+        header
+            .write_to(obj_md_size, &mut crc32_stream)
+            .map_err(|e| ImportError::WriteFileError {
+                path: pack_data_tmp_path.clone(),
+                error: e,
+            })?;
 
-        let compressed = compressor.into_inner();
+        let mut compressor = gix_zlib::stream::deflate::Write::new(
+            &mut crc32_stream,
+            gix_zlib::Compression::DEFAULT,
+        );
+        std::io::copy(&mut raw_stream, &mut compressor)
+            .map_err(|e| ImportError::OtherIoError { error: e })?;
+        compressor
+            .flush()
+            .map_err(|e| ImportError::WriteFileError {
+                path: pack_data_tmp_path.clone(),
+                error: e,
+            })?;
 
-        file_write_all(&mut pack_data_file, &pack_data_tmp_path, &raw_header)?;
-        pack_data_offset += u64::try_from(raw_header.len()).unwrap();
+        let (crc32, entry_len) = crc32_stream.finish();
+        pack_data_offset += entry_len;
 
-        file_write_all(&mut pack_data_file, &pack_data_tmp_path, &compressed)?;
-        pack_data_offset += u64::try_from(compressed.len()).unwrap();
-
-        let crc32 = 0;
-        let crc32 = gix_features::hash::crc32_update(crc32, &raw_header);
-        let crc32 = gix_features::hash::crc32_update(crc32, &compressed);
         index_entries.push(PackIndexEntry {
             oid,
             offset: entry_offset,
@@ -591,6 +661,41 @@ fn write_pack_data(
     rename(pack_data_tmp_path, pack_data_final_path)?;
 
     Ok((pack_hash, index_entries))
+}
+
+struct Crc32Stream<T: std::io::Write> {
+    crc32: u32,
+    len: u64,
+    inner: T,
+}
+
+impl<T: std::io::Write> Crc32Stream<T> {
+    #[inline]
+    fn new(inner: T) -> Self {
+        Self {
+            crc32: 0,
+            len: 0,
+            inner,
+        }
+    }
+
+    #[inline]
+    fn finish(self) -> (u32, u64) {
+        (self.crc32, self.len)
+    }
+}
+
+impl<T: std::io::Write> std::io::Write for Crc32Stream<T> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let n = self.inner.write(buf)?;
+        self.crc32 = gix_features::hash::crc32_update(self.crc32, &buf[..n]);
+        self.len += u64::try_from(n).unwrap();
+        Ok(n)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.inner.flush()
+    }
 }
 
 fn write_pack_index(
