@@ -58,6 +58,14 @@ pub(crate) struct Cli {
     )]
     pub(crate) git_hash: GitHash,
     #[arg(
+        long = "large-git-obj-threshold",
+        value_name = "SIZE",
+        help = "threshold (in bytes) for large git objects",
+        default_value_t = 512 * 1024 * 1024,
+        hide = true
+    )]
+    pub(crate) large_git_obj_threshold: usize,
+    #[arg(
         long = "obj-cache-size",
         value_name = "SIZE",
         help = "size (in MiB) of in-memory git object cache",

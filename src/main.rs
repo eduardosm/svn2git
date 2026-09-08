@@ -105,6 +105,7 @@ fn main_inner() -> Result<(), RunError> {
         avoid_fully_reverted_merges: params.avoid_fully_reverted_merges,
         generate_gitignore: params.generate_gitignore,
         delete_files,
+        large_git_obj_threshold: args.large_git_obj_threshold,
         git_obj_cache_size: args.git_obj_cache_size.saturating_mul(1024 * 1024),
         git_repack: args.git_repack,
     });

@@ -580,83 +580,99 @@ impl Stage<'_> {
                             .unwrap_or(false);
 
                         if let Some(node_text) = node_record.text.take() {
+                            let delta_base = orig_entry.map(|(_, _, orig_blob)| orig_blob);
+
+                            let mut svn_text_reader = self.svn_dump_reader.text_reader();
+                            let mut obj_writer = self.git_import.put_blob_stream(delta_base);
+
+                            let mut blob_writer: &mut dyn std::io::Write = &mut obj_writer;
+                            let mut special_decoder = None;
+                            if new_special {
+                                special_decoder = Some(SvnSpecialDecoder::new(&mut obj_writer));
+                                blob_writer = special_decoder.as_mut().unwrap();
+                            }
+
                             if node_text.is_delta {
-                                let source = if let Some((orig_special, _, orig_oid)) = orig_entry {
-                                    let mut source = self.git_import.get_blob(orig_oid)?;
+                                let mut empty_source: &[u8] = &[];
+                                let mut source_reader: &mut dyn std::io::Read = &mut empty_source;
+                                let mut obj_reader;
+                                let mut special_encoder;
+                                if let Some((orig_special, _, orig_oid)) = orig_entry {
+                                    obj_reader = Some(self.git_import.get_blob_stream(orig_oid)?);
+                                    let obj_reader = obj_reader.as_mut().unwrap();
                                     if let Some(orig_special) = orig_special {
-                                        self.encode_svn_special(&mut source, orig_special);
+                                        special_encoder =
+                                            Some(SvnSpecialEncoder::new(obj_reader, orig_special));
+                                        source_reader = special_encoder.as_mut().unwrap();
+                                    } else {
+                                        source_reader = obj_reader;
                                     }
-                                    source
-                                } else {
-                                    Vec::new()
-                                };
+                                }
 
-                                let mut delta = self.svn_dump_reader.text_reader();
-
-                                let mut result_data = Vec::new();
                                 if let Err(e) = svn::diff::apply(
-                                    &mut delta,
-                                    &mut source.as_slice(),
-                                    &mut result_data,
+                                    &mut svn_text_reader,
+                                    source_reader,
+                                    blob_writer,
                                 ) {
                                     tracing::error!("failed to apply SVN delta: {e}");
                                     return Err(ConvertError);
                                 };
-                                drop(delta);
-
-                                let mut blob_data = result_data;
-                                let new_special = if new_special {
-                                    Some(self.decode_svn_special(&mut blob_data, &node_path)?)
-                                } else {
-                                    None
-                                };
-
-                                tree_builder.mod_inline(
-                                    &node_path,
-                                    new_special,
-                                    new_executable,
-                                    blob_data,
-                                    orig_entry.map(|(_, _, orig_blob)| orig_blob),
-                                    self.git_import,
-                                )?;
                             } else {
-                                let data_len =
-                                    usize::try_from(self.svn_dump_reader.remaining_text_len())
-                                        .unwrap();
-                                let mut blob_data = vec![0; data_len];
-                                self.svn_dump_reader
-                                    .read_text(&mut blob_data)
-                                    .map_err(|e| {
-                                        tracing::error!("failed to read SVN node text: {e}");
-                                        ConvertError
-                                    })?;
-
-                                let new_special = if new_special {
-                                    Some(self.decode_svn_special(&mut blob_data, &node_path)?)
-                                } else {
-                                    None
-                                };
-
-                                tree_builder.mod_inline(
-                                    &node_path,
-                                    new_special,
-                                    new_executable,
-                                    blob_data,
-                                    orig_entry.map(|(_, _, orig_blob)| orig_blob),
-                                    self.git_import,
-                                )?;
+                                std::io::copy(&mut svn_text_reader, blob_writer).map_err(|e| {
+                                    tracing::error!(
+                                        "failed to copy SVN node text into Git object: {e}"
+                                    );
+                                    ConvertError
+                                })?;
                             }
+
+                            drop(svn_text_reader);
+                            let new_special = if let Some(special_decoder) = special_decoder {
+                                Some(special_decoder.finish(&node_path)?)
+                            } else {
+                                None
+                            };
+                            let blob_oid = obj_writer.finish()?;
+
+                            tree_builder.mod_blob(
+                                &node_path,
+                                new_special,
+                                new_executable,
+                                blob_oid,
+                                self.git_import,
+                            )?;
                         } else if let Some((orig_special, _, orig_oid)) = orig_entry {
                             let (new_special, oid) = if orig_special.is_none() && new_special {
-                                let mut orig_data = self.git_import.get_blob(orig_oid)?;
-                                let new_special =
-                                    self.decode_svn_special(&mut orig_data, &node_path)?;
-                                let oid = self.git_import.put_blob(orig_data, None)?;
+                                let mut orig_blob_stream =
+                                    self.git_import.get_blob_stream(orig_oid)?;
+                                let mut new_blob_stream =
+                                    self.git_import.put_blob_stream(Some(orig_oid));
+                                let mut special_decoder =
+                                    SvnSpecialDecoder::new(&mut new_blob_stream);
+                                std::io::copy(&mut orig_blob_stream, &mut special_decoder)
+                                    .map_err(|e| {
+                                        tracing::error!("failed to copy blob data: {e}");
+                                        ConvertError
+                                    })?;
+                                let new_special = special_decoder.finish(&node_path)?;
+                                let oid = new_blob_stream.finish()?;
                                 (Some(new_special), oid)
                             } else if orig_special.is_some() && !new_special {
-                                let mut orig_data = self.git_import.get_blob(orig_oid)?;
-                                self.encode_svn_special(&mut orig_data, orig_special.unwrap());
-                                let oid = self.git_import.put_blob(orig_data, None)?;
+                                let mut orig_blob_stream =
+                                    self.git_import.get_blob_stream(orig_oid)?;
+                                let mut special_encoder = SvnSpecialEncoder::new(
+                                    &mut orig_blob_stream,
+                                    orig_special.unwrap(),
+                                );
+                                let mut new_blob_stream =
+                                    self.git_import.put_blob_stream(Some(orig_oid));
+                                std::io::copy(&mut special_encoder, &mut new_blob_stream).map_err(
+                                    |e| {
+                                        tracing::error!("failed to copy blob data: {e}");
+                                        ConvertError
+                                    },
+                                )?;
+                                let oid = new_blob_stream.finish()?;
                                 (None, oid)
                             } else {
                                 (orig_special, orig_oid)
@@ -841,37 +857,6 @@ impl Stage<'_> {
             })?;
 
         Ok((svn_rev_props, next_record, node_ops, svn_tree_oid))
-    }
-
-    fn decode_svn_special(
-        &self,
-        blob_data: &mut Vec<u8>,
-        node_path: &[u8],
-    ) -> Result<svn_tree::FileSpecial, ConvertError> {
-        if blob_data.starts_with(b"link ") {
-            // strip the "link " prefix in symlinks
-            blob_data.splice(0..5, []);
-            Ok(svn_tree::FileSpecial::Link)
-        } else {
-            // Unknown special types are treated as regular files, without any modification
-            tracing::warn!(
-                "unknown \"svn:special\" file kind at \"{}\" in SVN dump",
-                node_path.escape_ascii(),
-            );
-            Ok(svn_tree::FileSpecial::Unknown)
-        }
-    }
-
-    fn encode_svn_special(&self, blob_data: &mut Vec<u8>, special: svn_tree::FileSpecial) {
-        match special {
-            svn_tree::FileSpecial::Link => {
-                // re-insert the "link " prefix for symlinks
-                blob_data.splice(0..0, b"link ".iter().copied());
-            }
-            svn_tree::FileSpecial::Unknown => {
-                // Unknown special types are treated as regular files, without any modification
-            }
-        }
     }
 
     fn svn_tree_to_git_tree(
@@ -1944,6 +1929,128 @@ impl Stage<'_> {
                 ConvertError
             })
             .map(Some)
+    }
+}
+
+struct SvnSpecialDecoder<T: std::io::Write> {
+    sink: T,
+    state: SvnSpecialDecoderState,
+}
+
+enum SvnSpecialDecoderState {
+    Head { buf: [u8; 5], len: usize },
+    Data(svn_tree::FileSpecial),
+}
+
+impl<T: std::io::Write> SvnSpecialDecoder<T> {
+    fn new(sink: T) -> Self {
+        Self {
+            sink,
+            state: SvnSpecialDecoderState::Head {
+                buf: [0; 5],
+                len: 0,
+            },
+        }
+    }
+
+    fn finish(mut self, node_path: &[u8]) -> Result<svn_tree::FileSpecial, ConvertError> {
+        let special = match self.state {
+            SvnSpecialDecoderState::Head { buf, len } => {
+                assert!(len < buf.len());
+                self.sink.write_all(&buf[..len]).map_err(|e| {
+                    tracing::error!("failed to write blob data: {e}");
+                    ConvertError
+                })?;
+                svn_tree::FileSpecial::Unknown
+            }
+            SvnSpecialDecoderState::Data(special) => special,
+        };
+        if special == svn_tree::FileSpecial::Unknown {
+            tracing::warn!(
+                "unknown \"svn:special\" file kind at \"{}\" in SVN dump",
+                node_path.escape_ascii(),
+            );
+        }
+        Ok(special)
+    }
+}
+
+impl<T: std::io::Write> std::io::Write for SvnSpecialDecoder<T> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        match self.state {
+            SvnSpecialDecoderState::Head {
+                buf: ref mut head_buf,
+                ref mut len,
+            } => {
+                assert!(*len < head_buf.len());
+
+                let len_to_copy = buf.len().min(head_buf.len() - *len);
+                head_buf[*len..][..len_to_copy].copy_from_slice(&buf[..len_to_copy]);
+                *len += len_to_copy;
+
+                let buf_full = *len == head_buf.len();
+                let head_buf = &head_buf[..*len];
+                if head_buf.starts_with(b"link ") {
+                    self.sink.write_all(&head_buf[5..])?;
+                    self.state = SvnSpecialDecoderState::Data(svn_tree::FileSpecial::Link);
+                } else if buf_full {
+                    self.sink.write_all(head_buf)?;
+                    self.state = SvnSpecialDecoderState::Data(svn_tree::FileSpecial::Unknown);
+                }
+
+                Ok(len_to_copy)
+            }
+            SvnSpecialDecoderState::Data(_) => self.sink.write(buf),
+        }
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        match self.state {
+            SvnSpecialDecoderState::Head { .. } => Ok(()),
+            SvnSpecialDecoderState::Data(_) => self.sink.flush(),
+        }
+    }
+}
+
+struct SvnSpecialEncoder<T: std::io::Read> {
+    source: T,
+    state: SvnSpecialEncoderState,
+}
+
+enum SvnSpecialEncoderState {
+    LinkHead(usize),
+    Data,
+}
+
+impl<T: std::io::Read> SvnSpecialEncoder<T> {
+    fn new(source: T, special: svn_tree::FileSpecial) -> Self {
+        Self {
+            source,
+            state: match special {
+                svn_tree::FileSpecial::Unknown => SvnSpecialEncoderState::Data,
+                svn_tree::FileSpecial::Link => SvnSpecialEncoderState::LinkHead(0),
+            },
+        }
+    }
+}
+
+impl<T: std::io::Read> std::io::Read for SvnSpecialEncoder<T> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        match self.state {
+            SvnSpecialEncoderState::LinkHead(ref mut pos) => {
+                let head = b"link ";
+                assert!(*pos < head.len());
+                let rem_head = &head[*pos..];
+                let len_to_copy = rem_head.len().min(buf.len());
+                buf[..len_to_copy].copy_from_slice(&rem_head[..len_to_copy]);
+                *pos += len_to_copy;
+                if *pos == head.len() {
+                    self.state = SvnSpecialEncoderState::Data;
+                }
+                Ok(len_to_copy)
+            }
+            SvnSpecialEncoderState::Data => self.source.read(buf),
+        }
     }
 }
 

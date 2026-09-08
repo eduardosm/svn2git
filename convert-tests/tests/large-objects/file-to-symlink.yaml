@@ -1,0 +1,118 @@
+svn-revs:
+  - props:
+      svn:log: init with symlink
+    nodes:
+      - path: trunk
+        kind: dir
+        action: add
+      - path: x
+        kind: file
+        action: add
+        props:
+          svn:special: "*"
+        text: "link target1"
+  - props:
+      svn:log: replace symlink with file
+    nodes:
+      - path: x
+        kind: file
+        action: replace
+        props: {} # Empty prop section
+        text: "x\n"
+  - props:
+      svn:log: replace file with symlink
+    nodes:
+      - path: x
+        kind: file
+        action: replace
+        props:
+          svn:special: "*"
+        text: "link target2"
+  - props:
+      svn:log: replace symlink with file (again)
+    nodes:
+      - path: x
+        kind: file
+        action: replace
+        # Without prop section
+        text: "y\n"
+  - props:
+      svn:log: replace file with symlink (again)
+    nodes:
+      - path: x
+        kind: file
+        action: replace
+        props:
+          svn:special: "*"
+        text: "link target3"
+  - props:
+      svn:log: replace symlink with fake symlink
+    nodes:
+      - path: x
+        kind: file
+        action: replace
+        # Without prop section
+        text: "link target4"
+  - props:
+      svn:log: convert fake symlink to symlink
+    nodes:
+      - path: x
+        kind: file
+        action: change
+        props:
+          svn:special: "*"
+  - props:
+      svn:log: convert symlink to fake symlink
+    nodes:
+      - path: x
+        kind: file
+        action: change
+        props: {}
+
+conv-params: |
+  head = ""
+  unbranched-name = "unbranched"
+
+large-git-obj-threshold: 2
+
+git-revs:
+  - rev: unbranched~7
+    tree:
+      x:
+        type: symlink
+        target: target1
+  - rev: unbranched~6
+    tree:
+      x:
+        type: normal
+        data: "x\n"
+  - rev: unbranched~5
+    tree:
+      x:
+        type: symlink
+        target: target2
+  - rev: unbranched~4
+    tree:
+      x:
+        type: normal
+        data: "y\n"
+  - rev: unbranched~3
+    tree:
+      x:
+        type: symlink
+        target: target3
+  - rev: unbranched~2
+    tree:
+      x:
+        type: normal
+        data: "link target4"
+  - rev: unbranched~1
+    tree:
+      x:
+        type: symlink
+        target: target4
+  - rev: unbranched~0
+    tree:
+      x:
+        type: normal
+        data: "link target4"

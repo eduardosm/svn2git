@@ -75,6 +75,7 @@ pub(crate) fn run_test(test_path: &Path) -> Result<(), String> {
         &git_repo_path,
         &conv_log_path,
         test_def.git_repack,
+        test_def.large_git_obj_threshold,
         test_def.failed.into(),
     )?;
 
@@ -334,6 +335,7 @@ fn run_convert(
     git_repo_path: &Path,
     conv_log_path: &Path,
     git_repack: bool,
+    large_git_obj_threshold: Option<u64>,
     expect_exit_code: i32,
 ) -> Result<(), String> {
     let mut conv_cmd = std::process::Command::new(conv_bin);
@@ -349,7 +351,8 @@ fn run_convert(
         .args(git_hash)
         .arg("--log-file")
         .arg(conv_log_path)
-        .args(git_repack.then_some("--git-repack"));
+        .args(git_repack.then_some("--git-repack"))
+        .args(large_git_obj_threshold.map(|th| format!("--large-git-obj-threshold={th}")));
 
     let cmd_out = conv_cmd
         .output()

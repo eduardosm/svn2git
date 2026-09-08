@@ -494,21 +494,6 @@ impl<'a> DumpReader<'a> {
         }
     }
 
-    #[inline]
-    pub(crate) fn remaining_text_len(&self) -> u64 {
-        self.rem_text_len
-    }
-
-    pub(crate) fn read_text(&mut self, buf: &mut [u8]) -> Result<(), std::io::Error> {
-        let len_u64 = u64::try_from(buf.len())
-            .ok()
-            .filter(|&l| l <= self.rem_text_len)
-            .expect("buffer too large");
-        self.source.read_exact(buf)?;
-        self.rem_text_len -= len_u64;
-        Ok(())
-    }
-
     pub(crate) fn text_reader(&mut self) -> impl std::io::BufRead {
         TextReader {
             source: std::io::Read::take(&mut self.source, self.rem_text_len),

@@ -44,16 +44,14 @@ impl TreeBuilder {
         Ok(())
     }
 
-    pub(super) fn mod_inline(
+    pub(super) fn mod_blob(
         &mut self,
         path: &[u8],
         special: Option<svn_tree::FileSpecial>,
         executable: bool,
-        blob: Vec<u8>,
-        delta_base: Option<ObjectId>,
+        blob_oid: ObjectId,
         importer: &mut git_wrap::Importer,
     ) -> Result<ObjectId, ConvertError> {
-        let blob_oid = importer.put_blob(blob, delta_base)?;
         self.mod_entry(
             path,
             svn_tree::NodeEntry::File {
