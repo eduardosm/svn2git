@@ -14,13 +14,13 @@ pub(crate) struct Test {
     #[serde(rename = "conv-params")]
     pub(crate) conv_params: String,
     #[serde(rename = "git-hash")]
-    pub(crate) git_hash: Option<String>,
+    pub(crate) git_hash: Option<Vec<Option<String>>>,
     #[serde(rename = "user-map")]
     pub(crate) user_map: Option<String>,
     #[serde(rename = "git-repack", default = "false_")]
     pub(crate) git_repack: bool,
     #[serde(rename = "large-git-obj-threshold")]
-    pub(crate) large_git_obj_threshold: Option<u64>,
+    pub(crate) large_git_obj_threshold: Option<Vec<Option<u64>>>,
     #[serde(rename = "failed", default = "false_")]
     pub(crate) failed: bool,
     #[serde(rename = "logs")]

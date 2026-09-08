@@ -6,8 +6,12 @@ use regex_syntax::hir as regex_hir;
 
 use crate::defs;
 
+struct TestMatrixData {
+    git_hash: Option<String>,
+    large_git_obj_threshold: Option<u64>,
+}
+
 pub(crate) fn run_test(test_path: &Path) -> Result<(), String> {
-    let temp_dir = get_tmp_dir()?;
     let svn2git_bin = Path::new(env!("CARGO_BIN_EXE_svn2git"));
 
     let test_def_raw =
@@ -16,129 +20,152 @@ pub(crate) fn run_test(test_path: &Path) -> Result<(), String> {
     let test_def: defs::Test = serde_yaml::from_slice(&test_def_raw)
         .map_err(|e| format!("failed to parse {test_path:?}: {e}"))?;
 
-    if let Some(ref user_map) = test_def.user_map {
-        let user_map_path = temp_dir.join("user-map.txt");
+    let mut matrix = Vec::new();
 
-        std::fs::write(&user_map_path, user_map)
-            .map_err(|e| format!("failed to write {user_map_path:?}: {e}"))?;
+    let git_hashes = test_def
+        .git_hash
+        .clone()
+        .unwrap_or_else(|| vec![None, Some("sha1".into()), Some("sha256".into())]);
+    let large_git_obj_thresholds = test_def
+        .large_git_obj_threshold
+        .clone()
+        .unwrap_or_else(|| vec![None, Some(0), Some(2), Some(10), Some(100)]);
+    for git_hash in git_hashes {
+        for &large_git_obj_threshold in large_git_obj_thresholds.iter() {
+            matrix.push(TestMatrixData {
+                git_hash: git_hash.clone(),
+                large_git_obj_threshold,
+            });
+        }
     }
 
-    let conv_params_path = temp_dir.join("conv-params.toml");
-    std::fs::write(&conv_params_path, test_def.conv_params.as_bytes())
-        .map_err(|e| format!("failed to write {conv_params_path:?}: {e}"))?;
+    for matrix_item in matrix.iter() {
+        let temp_dir = get_tmp_dir()?;
 
-    let svn_dump_path = temp_dir.join("svn-dump");
-    let svn_dump = make_svn_dump(&test_def);
-    let svn_dump = match test_def.svn_dump_source {
-        defs::SvnDumpSource::Uncompressed => svn_dump,
-        defs::SvnDumpSource::CompressedXz => {
-            liblzma::encode_all(&mut svn_dump.as_slice(), 6).unwrap()
-        }
-        defs::SvnDumpSource::CompressedGzip => {
-            let mut compressed = Vec::new();
-            let mut encoder =
-                flate2::write::GzEncoder::new(&mut compressed, flate2::Compression::default());
-            encoder.write_all(&svn_dump).unwrap();
-            encoder.finish().unwrap();
-            compressed
-        }
-        defs::SvnDumpSource::CompressedBzip2 => {
-            let mut compressed = Vec::new();
-            let mut encoder =
-                bzip2::write::BzEncoder::new(&mut compressed, bzip2::Compression::default());
-            encoder.write_all(&svn_dump).unwrap();
-            encoder.finish().unwrap();
-            compressed
-        }
-        defs::SvnDumpSource::CompressedZstd => {
-            zstd::encode_all(&mut svn_dump.as_slice(), 3).unwrap()
-        }
-        defs::SvnDumpSource::CompressedLz4 => {
-            let mut compressed = Vec::new();
-            let mut encoder = lz4_flex::frame::FrameEncoder::new(&mut compressed);
-            encoder.write_all(&svn_dump).unwrap();
-            encoder.finish().unwrap();
-            compressed
-        }
-    };
-    std::fs::write(&svn_dump_path, svn_dump)
-        .map_err(|e| format!("failed to write {svn_dump_path:?}: {e}"))?;
+        if let Some(ref user_map) = test_def.user_map {
+            let user_map_path = temp_dir.join("user-map.txt");
 
-    let git_repo_path = temp_dir.join("converted.git");
-    let conv_log_path = temp_dir.join("conv.log");
-
-    run_convert(
-        svn2git_bin,
-        &conv_params_path,
-        test_def.git_hash.as_deref(),
-        &svn_dump_path,
-        &git_repo_path,
-        &conv_log_path,
-        test_def.git_repack,
-        test_def.large_git_obj_threshold,
-        test_def.failed.into(),
-    )?;
-
-    if let Some(ref expected_logs) = test_def.logs {
-        check_log(&conv_log_path, expected_logs)?;
-    }
-
-    if !test_def.failed {
-        let fsck_result = std::process::Command::new("git")
-            .current_dir(&git_repo_path)
-            .arg("fsck")
-            .arg("--strict")
-            .arg("--no-progress")
-            .output()
-            .map_err(|e| format!("failed to run git fsck: {e}"))?;
-
-        if !fsck_result.status.success() {
-            return Err(format!(
-                "git fsck finished with {}\nstdout:\n{}\nstderr:\n{}",
-                fsck_result.status,
-                String::from_utf8_lossy(&fsck_result.stdout),
-                String::from_utf8_lossy(&fsck_result.stderr),
-            ));
+            std::fs::write(&user_map_path, user_map)
+                .map_err(|e| format!("failed to write {user_map_path:?}: {e}"))?;
         }
 
-        let git_repo = gix::open(&git_repo_path)
-            .map_err(|e| format!("failed to open git repository {git_repo_path:?}: {e}"))?;
+        let conv_params_path = temp_dir.join("conv-params.toml");
+        std::fs::write(&conv_params_path, test_def.conv_params.as_bytes())
+            .map_err(|e| format!("failed to write {conv_params_path:?}: {e}"))?;
 
-        if let Some(ref expected_git_refs) = test_def.git_refs {
-            let mut actual_git_refs = BTreeSet::new();
-
-            let refs = git_repo
-                .refs
-                .iter()
-                .map_err(|e| format!("failed to get git refs: {e}"))?;
-            let refs_iter = refs
-                .all()
-                .map_err(|e| format!("failed to get git refs: {e}"))?;
-            for ref_ in refs_iter {
-                let ref_ = ref_.map_err(|e| format!("failed to get git refs: {e}"))?;
-                actual_git_refs.insert(ref_.name.to_string());
+        let svn_dump_path = temp_dir.join("svn-dump");
+        let svn_dump = make_svn_dump(&test_def);
+        let svn_dump = match test_def.svn_dump_source {
+            defs::SvnDumpSource::Uncompressed => svn_dump,
+            defs::SvnDumpSource::CompressedXz => {
+                liblzma::encode_all(&mut svn_dump.as_slice(), 6).unwrap()
             }
+            defs::SvnDumpSource::CompressedGzip => {
+                let mut compressed = Vec::new();
+                let mut encoder =
+                    flate2::write::GzEncoder::new(&mut compressed, flate2::Compression::default());
+                encoder.write_all(&svn_dump).unwrap();
+                encoder.finish().unwrap();
+                compressed
+            }
+            defs::SvnDumpSource::CompressedBzip2 => {
+                let mut compressed = Vec::new();
+                let mut encoder =
+                    bzip2::write::BzEncoder::new(&mut compressed, bzip2::Compression::default());
+                encoder.write_all(&svn_dump).unwrap();
+                encoder.finish().unwrap();
+                compressed
+            }
+            defs::SvnDumpSource::CompressedZstd => {
+                zstd::encode_all(&mut svn_dump.as_slice(), 3).unwrap()
+            }
+            defs::SvnDumpSource::CompressedLz4 => {
+                let mut compressed = Vec::new();
+                let mut encoder = lz4_flex::frame::FrameEncoder::new(&mut compressed);
+                encoder.write_all(&svn_dump).unwrap();
+                encoder.finish().unwrap();
+                compressed
+            }
+        };
+        std::fs::write(&svn_dump_path, svn_dump)
+            .map_err(|e| format!("failed to write {svn_dump_path:?}: {e}"))?;
 
-            if actual_git_refs != *expected_git_refs {
+        let git_repo_path = temp_dir.join("converted.git");
+        let conv_log_path = temp_dir.join("conv.log");
+
+        run_convert(
+            svn2git_bin,
+            &conv_params_path,
+            matrix_item.git_hash.as_deref(),
+            &svn_dump_path,
+            &git_repo_path,
+            &conv_log_path,
+            test_def.git_repack,
+            matrix_item.large_git_obj_threshold,
+            test_def.failed.into(),
+        )?;
+
+        if let Some(ref expected_logs) = test_def.logs {
+            check_log(&conv_log_path, expected_logs)?;
+        }
+
+        if !test_def.failed {
+            let fsck_result = std::process::Command::new("git")
+                .current_dir(&git_repo_path)
+                .arg("fsck")
+                .arg("--strict")
+                .arg("--no-progress")
+                .output()
+                .map_err(|e| format!("failed to run git fsck: {e}"))?;
+
+            if !fsck_result.status.success() {
                 return Err(format!(
-                    "unexpected git refs:\nactual: {actual_git_refs:?}\nexpected: {expected_git_refs:?}",
+                    "git fsck finished with {}\nstdout:\n{}\nstderr:\n{}",
+                    fsck_result.status,
+                    String::from_utf8_lossy(&fsck_result.stdout),
+                    String::from_utf8_lossy(&fsck_result.stderr),
                 ));
             }
+
+            let git_repo = gix::open(&git_repo_path)
+                .map_err(|e| format!("failed to open git repository {git_repo_path:?}: {e}"))?;
+
+            if let Some(ref expected_git_refs) = test_def.git_refs {
+                let mut actual_git_refs = BTreeSet::new();
+
+                let refs = git_repo
+                    .refs
+                    .iter()
+                    .map_err(|e| format!("failed to get git refs: {e}"))?;
+                let refs_iter = refs
+                    .all()
+                    .map_err(|e| format!("failed to get git refs: {e}"))?;
+                for ref_ in refs_iter {
+                    let ref_ = ref_.map_err(|e| format!("failed to get git refs: {e}"))?;
+                    actual_git_refs.insert(ref_.name.to_string());
+                }
+
+                if actual_git_refs != *expected_git_refs {
+                    return Err(format!(
+                        "unexpected git refs:\nactual: {actual_git_refs:?}\nexpected: {expected_git_refs:?}",
+                    ));
+                }
+            }
+
+            for git_tag in test_def.git_tags.iter() {
+                check_git_tag(&git_repo, git_tag)
+                    .map_err(|e| format!("tag {:?} check failed: {e}", git_tag.tag))?;
+            }
+
+            for git_rev in test_def.git_revs.iter() {
+                check_git_rev(&git_repo, git_rev)
+                    .map_err(|e| format!("revision {:?} check failed: {e}", git_rev.rev))?;
+            }
         }
 
-        for git_tag in test_def.git_tags.iter() {
-            check_git_tag(&git_repo, git_tag)
-                .map_err(|e| format!("tag {:?} check failed: {e}", git_tag.tag))?;
-        }
-
-        for git_rev in test_def.git_revs.iter() {
-            check_git_rev(&git_repo, git_rev)
-                .map_err(|e| format!("revision {:?} check failed: {e}", git_rev.rev))?;
-        }
+        std::fs::remove_dir_all(&temp_dir)
+            .map_err(|e| format!("failed to remove {temp_dir:?}: {e}"))?;
     }
-
-    std::fs::remove_dir_all(&temp_dir)
-        .map_err(|e| format!("failed to remove {temp_dir:?}: {e}"))?;
 
     Ok(())
 }
